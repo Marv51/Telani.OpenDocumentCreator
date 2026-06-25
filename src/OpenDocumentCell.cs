@@ -28,6 +28,13 @@ public class OpenDocumentCell
     public string? Content { get; set; }
 
     /// <summary>
+    /// Controls how empty lines within <see cref="Content"/> are rendered. Defaults to
+    /// <see cref="EmptyLineHandling.Collapse"/>, which preserves the historical behaviour
+    /// of dropping consecutive, leading and trailing line breaks.
+    /// </summary>
+    public EmptyLineHandling EmptyLines { get; set; } = EmptyLineHandling.Collapse;
+
+    /// <summary>
     /// The float content of this cell.
     /// </summary>
     public float? FloatContent { get; set; }
@@ -117,6 +124,30 @@ public class OpenDocumentCell
     /// </summary>
     public OpenDocumentCell()
     {
+    }
+
+    private IReadOnlyList<string> SplitContentLines(string content)
+    {
+        if (EmptyLines == EmptyLineHandling.Collapse)
+        {
+            return content.Split(Separator, StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        var lines = new List<string>(content.Split(Separator, StringSplitOptions.None));
+
+        if (EmptyLines == EmptyLineHandling.TrimEnds)
+        {
+            while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[0]))
+            {
+                lines.RemoveAt(0);
+            }
+            while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[^1]))
+            {
+                lines.RemoveAt(lines.Count - 1);
+            }
+        }
+
+        return lines;
     }
 
     private static XNode[] EncodeTextContent(string the_text)
@@ -233,8 +264,7 @@ public class OpenDocumentCell
                 elem = OpenDocument.GetElementFor(cellNode);
                 if (Content.Contains('\n'))
                 {
-                    var lines = Content.Split(Separator, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var line in lines)
+                    foreach (var line in SplitContentLines(Content))
                     {
                         elem.Add(new XElement(Text + "p", EncodeTextContent(line)));
                     }
