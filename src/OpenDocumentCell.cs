@@ -35,9 +35,12 @@ public class OpenDocumentCell
     public EmptyLineHandling EmptyLines { get; set; } = EmptyLineHandling.Collapse;
 
     /// <summary>
-    /// The float content of this cell.
+    /// The numeric content of this cell.
+    ///
+    /// ODF names the value type "float", but declares office:value as xs:double, so this is a
+    /// double: values are stored with the full precision the format allows.
     /// </summary>
-    public float? FloatContent { get; set; }
+    public double? FloatContent { get; set; }
 
     /// <summary>
     /// The formula of this cell. (You also need to set the FloatContent or Content with the result)
@@ -103,7 +106,7 @@ public class OpenDocumentCell
     /// Initializes a new instance of the <see cref="OpenDocumentCell"/> class.
     /// </summary>
     /// <param name="c"></param>
-    public OpenDocumentCell(double c) => FloatContent = Convert.ToSingle(c);
+    public OpenDocumentCell(double c) => FloatContent = c;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OpenDocumentCell"/> class.
@@ -193,6 +196,33 @@ public class OpenDocumentCell
         return [.. elems];
     }
 
+    /// <summary>
+    /// Formats a value for the office:value attribute.
+    ///
+    /// ODF declares that attribute as xs:double, whose lexical space spells the non finite values
+    /// INF, -INF and NaN. .NET writes "Infinity", "-Infinity" and "NaN" instead, and the first two
+    /// are not valid xs:double, so they are mapped here. Finite values use the default round
+    /// trippable form.
+    /// </summary>
+    /// <param name="value">the value to format</param>
+    /// <returns>the lexical representation for office:value</returns>
+    private static string FormatCellValue(double value)
+    {
+        if (double.IsPositiveInfinity(value))
+        {
+            return "INF";
+        }
+        if (double.IsNegativeInfinity(value))
+        {
+            return "-INF";
+        }
+        if (double.IsNaN(value))
+        {
+            return "NaN";
+        }
+        return value.ToString(CultureInfo.InvariantCulture);
+    }
+
     internal XElement CreateElement()
     {
         if (IsCovered)
@@ -241,7 +271,7 @@ public class OpenDocumentCell
                     cellNode.ValueType = "float";
                     cellNode.Formula = Formula;
                     elem = OpenDocument.GetElementFor(cellNode);
-                    elem.Add(new XAttribute(Office + "value", FloatContent.Value.ToString(CultureInfo.InvariantCulture)));
+                    elem.Add(new XAttribute(Office + "value", FormatCellValue(FloatContent.Value)));
                     elem.Add(new XElement(Text + "p", new XText(FloatContent.Value.ToString(CultureInfo.CurrentCulture))));
                 }
                 else if (!string.IsNullOrEmpty(Content))
@@ -278,7 +308,7 @@ public class OpenDocumentCell
             {
                 cellNode.ValueType = "float";
                 elem = OpenDocument.GetElementFor(cellNode);
-                elem.Add(new XAttribute(Office + "value", FloatContent.Value.ToString(CultureInfo.InvariantCulture)));
+                elem.Add(new XAttribute(Office + "value", FormatCellValue(FloatContent.Value)));
                 elem.Add(new XElement(Text + "p", new XText(FloatContent.Value.ToString(CultureInfo.CurrentCulture))));
             }
             else
