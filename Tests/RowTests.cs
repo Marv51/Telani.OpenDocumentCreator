@@ -37,7 +37,8 @@ public sealed class RowTests
         Assert.AreEqual(1, row.IndexOf(b));
         Assert.AreEqual(-1, row.IndexOf(new OpenDocumentCell("not in the row")));
 
-        row.Insert(1, new OpenDocumentCell("inserted"));
+        // Insert is an explicit implementation, so it is only reachable through the interface
+        ((IList<OpenDocumentCell>)row).Insert(1, new OpenDocumentCell("inserted"));
 
         Assert.HasCount(4, row);
         Assert.AreEqual("inserted", row[1].Content);

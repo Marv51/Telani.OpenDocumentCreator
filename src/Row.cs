@@ -262,16 +262,14 @@ public class Row : IList<OpenDocumentCell>
     /// <returns>the index of the cell, or -1 if it is not in this row</returns>
     public int IndexOf(OpenDocumentCell item) => _cells.IndexOf(item);
 
-    /// <summary>
-    /// Inserts a cell at <paramref name="index"/>.
-    ///
-    /// Unlike <see cref="InsertCell(OpenDocumentCell)"/> this does not append covered cells for a
-    /// cell that spans several columns, because that would shift the cells after it out of place.
-    /// </summary>
-    /// <param name="index">the index to insert at</param>
-    /// <param name="item">the cell to insert</param>
-    /// <exception cref="ArgumentOutOfRangeException">if the index is outside of the row</exception>
-    public void Insert(int index, OpenDocumentCell item) => _cells.Insert(index, item);
+    /// <inheritdoc />
+    /// <remarks>
+    /// Implemented explicitly, so that it does not show up on <see cref="Row"/> itself: unlike
+    /// <see cref="InsertCell(OpenDocumentCell)"/> it does not append covered cells for a cell that
+    /// spans several columns, because that would shift the cells after it out of place. Use
+    /// <see cref="InsertCell(OpenDocumentCell)"/> to add a cell to a row.
+    /// </remarks>
+    void IList<OpenDocumentCell>.Insert(int index, OpenDocumentCell item) => _cells.Insert(index, item);
 
     /// <summary>
     /// Removes the cell at <paramref name="index"/>.
