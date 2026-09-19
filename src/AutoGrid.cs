@@ -13,6 +13,15 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
     private readonly string defaultColWidth;
 
     /// <summary>
+    /// The number of columns every row is known to hold cells for. Compared against
+    /// <see cref="OpenDocumentTable.Columns"/> to decide whether the rows need padding, which keeps
+    /// that walk off the per-cell write path. Comparing counts rather than remembering that this
+    /// class grew the columns also covers columns added directly through
+    /// <see cref="OpenDocumentTable.AddColumn(Column)"/> or the <see cref="OpenDocumentTable.Columns"/> list.
+    /// </summary>
+    private int paddedToColumnCount;
+
+    /// <summary>
     /// Ensures that the table is large enough to have a row at the specified index, adding new empty rows if necessary.
     /// The added rows will have the same number of columns as the current table.
     /// In cases when a count or length is added to the index, the current index (here 'index') is ensured as well, so need to subtract 1 from the count/length to avoid adding an extra row/column.
@@ -49,6 +58,17 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
         {
             AutoColumnProcessor.Apply(doc, this, AutoColumnProcessor.CreateColumns(index - Columns.Count + 1, defaultColWidth));
         }
+
+        // A row can only fall behind when the column count grows: EnsureEnoughRows gives
+        // every new row as many cells as there are columns at the time, and nothing else
+        // shortens a row. So when the count has not moved since the last pass, there is
+        // nothing to pad, and walking every row on every WriteCell made writing a cell
+        // cost O(Rows.Count).
+        if (paddedToColumnCount == Columns.Count)
+        {
+            return;
+        }
+
         foreach (Row row in Rows)
         {
             while (Columns.Count > row.Count)
@@ -56,6 +76,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
                 row.Add(new OpenDocumentCell());
             }
         }
+        paddedToColumnCount = Columns.Count;
     }
 
     private void EnsureTableSize(int x, int y)
