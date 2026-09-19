@@ -1,4 +1,6 @@
-﻿namespace OpenDocumentCreator.Tests;
+﻿using System.IO.Compression;
+
+namespace OpenDocumentCreator.Tests;
 
 [TestClass]
 public sealed class AutoGridTests
@@ -251,20 +253,19 @@ public sealed class AutoGridTests
 
     private async Task<string> SaveDocAndReadContentXml()
     {
-        MemoryStream mem = new();
+        using MemoryStream mem = new();
+        await doc.Save(mem, leaveOpen: true);
 
-        // Save closes the stream, so read the bytes back out of the closed stream.
-        await doc.Save(mem);
-        using var saved = new MemoryStream(mem.ToArray());
-        using var zip = new System.IO.Compression.ZipArchive(saved, System.IO.Compression.ZipArchiveMode.Read);
+        mem.Position = 0;
+        using var zip = new ZipArchive(mem, ZipArchiveMode.Read);
         using var reader = new StreamReader(zip.GetEntry("content.xml")!.Open());
         return await reader.ReadToEndAsync();
     }
 
     private async Task SaveDoc()
     {
-        MemoryStream mem = new();
-        await doc.Save(mem);
+        using MemoryStream mem = new();
+        await doc.Save(mem, leaveOpen: true);
     }
 
     private static void AssertRectangleGrid(AutoGrid ag)
