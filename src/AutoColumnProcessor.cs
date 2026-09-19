@@ -18,24 +18,11 @@ namespace OpenDocumentCreator;
 /// </summary>
 public static class AutoColumnProcessor
 {
-    private static List<Column> Process(Dictionary<string, OpenDocumentStyle> styles, IList<AutoColumn> columns)
+    private static List<Column> Process(OpenDocument doc, IList<AutoColumn> columns)
     {
         foreach (var c in columns)
         {
-            var foundStyle = styles.Values
-                .Where(s => s.Family == StyleFamily.TableColumn)
-                .FirstOrDefault(s => s is not null && s.TableColumnProperties is not null && s.TableColumnProperties == c.Properties);
-            if (foundStyle is null)
-            {
-                foundStyle = new OpenDocumentStyle
-                {
-                    Name = "auto_col_" + styles.Count,
-                    Family = StyleFamily.TableColumn,
-                    TableColumnProperties = c.Properties,
-                };
-                styles.Add(foundStyle.Name, foundStyle);
-            }
-            c.Column.StyleName = foundStyle.Name;
+            c.Column.StyleName = doc.GetOrAddTableColumnStyle(c.Properties).Name;
         }
         return columns.Select(a => a.Column).ToList();
     }
@@ -56,7 +43,7 @@ public static class AutoColumnProcessor
         ArgumentNullException.ThrowIfNull(doc, nameof(doc));
         ArgumentNullException.ThrowIfNull(autoColumns, nameof(autoColumns));
 
-        var columns = Process(doc.Styles, autoColumns);
+        var columns = Process(doc, autoColumns);
         table.AddColumns(columns);
     }
 

@@ -235,26 +235,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
                 ColumnWidth = new Measurement(decimal.Parse(width[0..^2], CultureInfo.InvariantCulture), Unit.MM),
             };
 
-            OpenDocumentStyle? foundStyle = this.doc.Styles.Values
-               .Where(s => s.Family == StyleFamily.TableColumn)
-               .FirstOrDefault(s => s is not null && s.TableColumnProperties is not null && s.TableColumnProperties == properties);
-
-            if (foundStyle is not null && foundStyle.TableColumnProperties is not null)
-            {
-                Columns[x].StyleName = foundStyle.Name;
-            }
-            else
-            {
-                var newStyle = new OpenDocumentStyle
-                {
-                    Name = "auto_col_" + this.doc.Styles.Count,
-                    Family = StyleFamily.TableColumn,
-                    TableColumnProperties = properties,
-                };
-                this.doc.Styles.Add(newStyle.Name, newStyle);
-
-                Columns[x].StyleName = newStyle.Name;
-            }
+            Columns[x].StyleName = this.doc.GetOrAddTableColumnStyle(properties).Name;
             x++;
         }
     }
