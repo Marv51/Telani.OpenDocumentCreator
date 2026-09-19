@@ -45,6 +45,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Telani.OpenDocumentCreator.Tests" />
+    <InternalsVisibleTo Include="Telani.OpenDocumentCreator.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>
