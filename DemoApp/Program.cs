@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using OpenDocumentCreator;
 using OpenDocumentCreator.DataTypes;
 using OpenDocumentCreator.Styles;
@@ -62,7 +62,7 @@ for (int i = 0; i < planets.Length; i++)
 var path = Path.Combine(outDir, "planets.ods");
 await using (var fs = File.Create(path))
 {
-    await doc.Save(fs);
+    await doc.Save(fs, leaveOpen: true);
 }
 
 Console.WriteLine($"Wrote {path}");
