@@ -257,6 +257,38 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
         }
     }
 
+    /// <summary>
+    /// Way to set the default cell style of one or more columns after they are initialized.
+    ///
+    /// Cells in that column that carry no style of their own are rendered with this style,
+    /// which is the ODF-native way to style the body of a table: one attribute per column
+    /// instead of a style on every cell. A style set on the row wins over this one,
+    /// as does a style set on the cell itself.
+    /// </summary>
+    /// <param name="x">the index of the (first) column</param>
+    /// <param name="styles">the name or names of the cell styles to set. These need to exist
+    /// in the document and, if they declare a family, be <see cref="StyleFamily.TableCell"/> styles.</param>
+    /// <exception cref="ArgumentException">if the column index is outside of the acceptable range</exception>
+    /// <exception cref="InvalidOperationException">if a style is not found or is not a cell style</exception>
+    public void SetColumnsDefaultCellStyle(int x, params string[] styles)
+    {
+        EnsureEnoughColumns(x + styles.Length - 1);
+        foreach (string style in styles)
+        {
+            if (x < 0 || x >= Columns.Count)
+            {
+                throw new ArgumentException("Invalid Column index " + x + " for table " + Name + " with " + Columns.Count + " columns");
+            }
+            var foundStyle = doc.Styles.Values.FirstOrDefault(s => s.Name == style) ?? throw new InvalidOperationException("The required style was not found");
+            if (foundStyle.Family is not null && foundStyle.Family != StyleFamily.TableCell)
+            {
+                throw new InvalidOperationException("The style " + style + " is a " + foundStyle.Family + " style, but a default cell style has to be a " + StyleFamily.TableCell + " style");
+            }
+            Columns[x].DefaultCellStyleName = style;
+            x++;
+        }
+    }
+
     /// <inheritdoc />
     public void WriteRow(int x, int y, Row row) => WriteRows(x, y, row);
 

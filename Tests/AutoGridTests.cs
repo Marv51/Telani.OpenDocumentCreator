@@ -166,6 +166,84 @@ public sealed class AutoGridTests
         await SaveDoc();
     }
 
+    [TestMethod]
+    public async Task SetColumnsDefaultCellStyleTest()
+    {
+        var ag = SetupAutoGrid();
+        doc.Styles.Add("ce_border", new Styles.OpenDocumentStyle
+        {
+            Name = "ce_border",
+            Family = DataTypes.StyleFamily.TableCell,
+        });
+
+        ag.SetColumnsDefaultCellStyle(1, "ce_border", "ce_border");
+
+        Assert.AreEqual("ce_border", ag.Columns[1].DefaultCellStyleName);
+        Assert.AreEqual("ce_border", ag.Columns[2].DefaultCellStyleName);
+        Assert.AreEqual("ce1", ag.Columns[0].DefaultCellStyleName, "untouched columns keep the default");
+
+        StringAssert.Contains(await SaveDocAndReadContentXml(), "table:default-cell-style-name=\"ce_border\"");
+
+        AssertRectangleGrid(ag);
+    }
+
+    [TestMethod]
+    public void SetColumnsDefaultCellStyleGrowsTableTest()
+    {
+        var ag = SetupAutoGrid();
+        doc.Styles.Add("ce_border", new Styles.OpenDocumentStyle
+        {
+            Name = "ce_border",
+            Family = DataTypes.StyleFamily.TableCell,
+        });
+
+        ag.SetColumnsDefaultCellStyle(10, "ce_border");
+
+        Assert.AreEqual("ce_border", ag.Columns[10].DefaultCellStyleName);
+        AssertRectangleGrid(ag);
+    }
+
+    [TestMethod]
+    public void SetColumnsDefaultCellStyleFailTest()
+    {
+        var ag = SetupAutoGrid();
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => ag.SetColumnsDefaultCellStyle(1, "missing"));
+
+        doc.Styles.Add("co_wrong_family", new Styles.OpenDocumentStyle
+        {
+            Name = "co_wrong_family",
+            Family = DataTypes.StyleFamily.TableColumn,
+        });
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => ag.SetColumnsDefaultCellStyle(1, "co_wrong_family"));
+
+        Assert.AreEqual("ce1", ag.Columns[1].DefaultCellStyleName);
+    }
+
+    [TestMethod]
+    public void SetColumnsDefaultCellStyleAcceptsStyleWithoutFamilyTest()
+    {
+        var ag = SetupAutoGrid();
+        doc.Styles.Add("ce_no_family", new Styles.OpenDocumentStyle { Name = "ce_no_family" });
+
+        ag.SetColumnsDefaultCellStyle(1, "ce_no_family");
+
+        Assert.AreEqual("ce_no_family", ag.Columns[1].DefaultCellStyleName);
+    }
+
+    private async Task<string> SaveDocAndReadContentXml()
+    {
+        MemoryStream mem = new();
+
+        // Save closes the stream, so read the bytes back out of the closed stream.
+        await doc.Save(mem);
+        using var saved = new MemoryStream(mem.ToArray());
+        using var zip = new System.IO.Compression.ZipArchive(saved, System.IO.Compression.ZipArchiveMode.Read);
+        using var reader = new StreamReader(zip.GetEntry("content.xml")!.Open());
+        return await reader.ReadToEndAsync();
+    }
+
     private async Task SaveDoc()
     {
         MemoryStream mem = new();
