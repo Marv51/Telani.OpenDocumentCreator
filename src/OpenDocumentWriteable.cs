@@ -85,16 +85,13 @@ public abstract class OpenDocumentWritable
         var element_namespace = NamespaceName is null ? OpenDocument.Style : OpenDocument.FindNamespace(NamespaceName);
 
         var elem = new XElement(element_namespace + OpenDocumentElementName);
-        if (NamespaceDefinitions.Any())
+        foreach (var item in NamespaceDefinitions)
         {
-            foreach (var item in NamespaceDefinitions)
-            {
-                elem.Add(item);
-            }
+            elem.Add(item);
         }
         var cacheKey = NamespaceName + ":" + OpenDocumentElementName;
 
-        if (!OpenDocument.TypeCache.ContainsKey(cacheKey))
+        if (!OpenDocument.TypeCache.TryGetValue(cacheKey, out var serializers))
         {
             var typeInfo = GetType().GetTypeInfo();
             var type = GetType();
@@ -118,9 +115,11 @@ public abstract class OpenDocumentWritable
                     });
                 }
             }
-            OpenDocument.TypeCache.TryAdd(cacheKey, serList);
+            // Another element of the same kind may have won the race; take whichever list ended
+            // up in the cache so both callers use the same one.
+            serializers = OpenDocument.TypeCache.GetOrAdd(cacheKey, serList);
         }
-        foreach (var prop in OpenDocument.TypeCache[cacheKey])
+        foreach (var prop in serializers)
         {
             object? value = prop.Getter(this);
 
