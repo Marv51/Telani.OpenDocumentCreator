@@ -12,7 +12,7 @@ namespace OpenDocumentCreator;
 /// This class behaves like a collection to enable nice syntax shortcuts.
 /// </summary>
 #pragma warning disable CA1710 // Identifiers should have correct suffix
-public class Row : IEnumerable<OpenDocumentCell>, ICollection<OpenDocumentCell>
+public class Row : IList<OpenDocumentCell>
 #pragma warning restore CA1710 // Identifiers should have correct suffix
 {
     /// <summary>
@@ -24,14 +24,13 @@ public class Row : IEnumerable<OpenDocumentCell>, ICollection<OpenDocumentCell>
     /// Initializes a new instance of the <see cref="Row"/> class with applied row style.
     /// </summary>
     /// <param name="style">the style to apply to this row.</param>
-    public Row(OpenDocumentStyle style) => Style = style;
+    public Row(OpenDocumentStyle style)
+        : this() => Style = style;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Row"/> class.
     /// </summary>
-    public Row()
-    {
-    }
+    public Row() => _readOnlyCells = new ReadOnlyCollection<OpenDocumentCell>(_cells);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Row"/> class from this enumeration of cells.
@@ -39,6 +38,7 @@ public class Row : IEnumerable<OpenDocumentCell>, ICollection<OpenDocumentCell>
     /// <param name="cells">Cells to include in the row</param>
     /// <exception cref="System.ArgumentNullException">if the <paramref name="cells"/> argument is null</exception>
     public Row(IEnumerable<OpenDocumentCell> cells)
+        : this()
     {
         ArgumentNullException.ThrowIfNull(cells, nameof(cells));
 
@@ -51,7 +51,19 @@ public class Row : IEnumerable<OpenDocumentCell>, ICollection<OpenDocumentCell>
     /// <summary>
     /// The collection of cells in this row.
     /// </summary>
-    public IReadOnlyCollection<OpenDocumentCell> Cells => new ReadOnlyCollection<OpenDocumentCell>(_cells);
+    public IReadOnlyCollection<OpenDocumentCell> Cells => _readOnlyCells;
+
+    /// <summary>
+    /// Gets or sets the cell at <paramref name="index"/>.
+    /// </summary>
+    /// <param name="index">the index of the cell</param>
+    /// <returns>the cell at that index</returns>
+    /// <exception cref="ArgumentOutOfRangeException">if the index is outside of the row</exception>
+    public OpenDocumentCell this[int index]
+    {
+        get => _cells[index];
+        set => _cells[index] = value;
+    }
 
     /// <summary>
     /// Gets the number of cells in this row.
@@ -64,6 +76,11 @@ public class Row : IEnumerable<OpenDocumentCell>, ICollection<OpenDocumentCell>
     public bool IsReadOnly => false;
 
     private readonly List<OpenDocumentCell> _cells = [];
+
+    // Wrapping the list once keeps Cells allocation free; the wrapper stays in
+    // sync with the list it wraps.
+    private readonly ReadOnlyCollection<OpenDocumentCell> _readOnlyCells;
+
     private static readonly char[] Separator = ['|'];
 
     /// <summary>
@@ -134,7 +151,7 @@ public class Row : IEnumerable<OpenDocumentCell>, ICollection<OpenDocumentCell>
     /// <inheritdoc/>
     public IEnumerator<OpenDocumentCell> GetEnumerator()
     {
-        return Cells.GetEnumerator();
+        return _cells.GetEnumerator();
     }
 
     /// <inheritdoc/>
@@ -236,9 +253,30 @@ public class Row : IEnumerable<OpenDocumentCell>, ICollection<OpenDocumentCell>
     /// </summary>
     /// <param name="x">the index</param>
     /// <param name="cell">the new cell</param>
-    public void Replace(int x, OpenDocumentCell cell)
-    {
-        _cells.Insert(x, cell);
-        _cells.RemoveAt(x + 1);
-    }
+    public void Replace(int x, OpenDocumentCell cell) => _cells[x] = cell;
+
+    /// <summary>
+    /// Determines the index of <paramref name="item"/> in this row.
+    /// </summary>
+    /// <param name="item">the cell to look for</param>
+    /// <returns>the index of the cell, or -1 if it is not in this row</returns>
+    public int IndexOf(OpenDocumentCell item) => _cells.IndexOf(item);
+
+    /// <summary>
+    /// Inserts a cell at <paramref name="index"/>.
+    ///
+    /// Unlike <see cref="InsertCell(OpenDocumentCell)"/> this does not append covered cells for a
+    /// cell that spans several columns, because that would shift the cells after it out of place.
+    /// </summary>
+    /// <param name="index">the index to insert at</param>
+    /// <param name="item">the cell to insert</param>
+    /// <exception cref="ArgumentOutOfRangeException">if the index is outside of the row</exception>
+    public void Insert(int index, OpenDocumentCell item) => _cells.Insert(index, item);
+
+    /// <summary>
+    /// Removes the cell at <paramref name="index"/>.
+    /// </summary>
+    /// <param name="index">the index of the cell to remove</param>
+    /// <exception cref="ArgumentOutOfRangeException">if the index is outside of the row</exception>
+    public void RemoveAt(int index) => _cells.RemoveAt(index);
 }
