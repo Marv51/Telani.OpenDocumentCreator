@@ -357,7 +357,7 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     /// <summary>
     /// Finalize and save the document to a file at <paramref name="path"/>
     /// </summary>
-    /// <seealso cref="Save(Stream, bool, string)"/>
+    /// <seealso cref="Save(Stream, bool, string, bool)"/>
     /// <returns>Task to await the process</returns>
     /// <param name="path">The path to save the file to</param>
     /// <param name="unzip">Create unzipped</param>
@@ -401,8 +401,12 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     /// <param name="fileToSave">the stream to save to</param>
     /// <param name="unzip">output unzipped </param>
     /// <param name="documentFont">the font used for the document</param>
+    /// <param name="leaveOpen">true to leave <paramref name="fileToSave"/> open once the document
+    /// has been written, so that the caller can keep using it. Defaults to false, which closes the
+    /// stream. Note that the writing happens on a thread pool thread, so the returned task has to be
+    /// awaited before the stream is touched either way.</param>
     /// <returns>Task to await the process</returns>
-    public Task Save(Stream fileToSave, bool unzip = false, string documentFont = "Calibri")
+    public Task Save(Stream fileToSave, bool unzip = false, string documentFont = "Calibri", bool leaveOpen = false)
     {
         return Task.Run(() =>
         {
@@ -410,7 +414,7 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
 
             try
             {
-                WriteZipFile(fileToSave, unzip, documentFont);
+                WriteZipFile(fileToSave, unzip, documentFont, leaveOpen);
             }
             catch (IOException ex)
             {
@@ -425,7 +429,7 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     /// </summary>
     protected abstract void ValidationBeforeSave();
 
-    private void WriteZipFile(Stream fileToSave, bool unzip, string documentFont)
+    private void WriteZipFile(Stream fileToSave, bool unzip, string documentFont, bool leaveOpen)
     {
         var styleFile = CreateStyleFile(documentFont);
         var contentFile = CreateContentFile();
@@ -468,7 +472,7 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
                 throw new InvalidOperationException("Cant convert to filestream");
             }
         }
-        using var zip = new ZipArchive(fileToSave, ZipArchiveMode.Create);
+        using var zip = new ZipArchive(fileToSave, ZipArchiveMode.Create, leaveOpen);
         AddEntry(zip, "mimetype", mimeType, CompressionLevel.NoCompression);
         foreach (var (path, file) in resources)
         {
