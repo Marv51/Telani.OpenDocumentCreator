@@ -22,23 +22,38 @@ namespace OpenDocumentCreator.Benchmarks;
 [MemoryDiagnoser]
 public class LargeDocumentBenchmarks
 {
-    /// <summary>Rows in the exported grid.</summary>
-    [Params(1000, 5000)]
-    public int Rows { get; set; }
+    /// <summary>
+    /// The shape of the exported grid, as "rows x columns".
+    ///
+    /// 1000x600 is the shape of a real export this library is used for; the two tall-and-narrow
+    /// shapes are there because a wide grid and a tall grid stress different code.
+    /// </summary>
+    [Params("1000x15", "5000x15", "1000x600")]
+    public string Shape { get; set; } = "1000x15";
 
-    private const int Columns = 15;
+    private int rows;
+    private int columns;
+
+    /// <summary>Splits the shape parameter into its two numbers.</summary>
+    [GlobalSetup]
+    public void ParseShape()
+    {
+        var parts = Shape.Split('x');
+        rows = int.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+        columns = int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     private OpenDocumentSpreadsheet prepared = null!;
 
-    private static OpenDocumentSpreadsheet BuildDocument(int rows)
+    private static OpenDocumentSpreadsheet BuildDocument(int rows, int columns)
     {
         var doc = new OpenDocumentSpreadsheet();
-        var ag = new AutoGrid(doc, "Export", rows, Columns, "20mm");
+        var ag = new AutoGrid(doc, "Export", rows, columns, "20mm");
         doc.Tables.Add(ag);
 
         for (var y = 0; y < rows; y++)
         {
-            for (var x = 0; x < Columns; x++)
+            for (var x = 0; x < columns; x++)
             {
                 ag.WriteCell(x, y, "cell");
             }
@@ -49,11 +64,11 @@ public class LargeDocumentBenchmarks
     /// <summary>Builds the grid and fills every cell.</summary>
     /// <returns>the document, so nothing is optimized away</returns>
     [Benchmark]
-    public OpenDocumentSpreadsheet Build() => BuildDocument(Rows);
+    public OpenDocumentSpreadsheet Build() => BuildDocument(rows, columns);
 
     /// <summary>Rebuilds the document before each measured save, outside the measured region.</summary>
     [IterationSetup(Target = nameof(Save))]
-    public void PrepareDocument() => prepared = BuildDocument(Rows);
+    public void PrepareDocument() => prepared = BuildDocument(rows, columns);
 
 
     /// <summary>Serializes and zips an already built document.</summary>
@@ -72,7 +87,7 @@ public class LargeDocumentBenchmarks
     public long BuildAndSave()
     {
         using var mem = new MemoryStream();
-        BuildDocument(Rows).Save(mem, leaveOpen: true).GetAwaiter().GetResult();
+        BuildDocument(rows, columns).Save(mem, leaveOpen: true).GetAwaiter().GetResult();
         return mem.Length;
     }
 }
