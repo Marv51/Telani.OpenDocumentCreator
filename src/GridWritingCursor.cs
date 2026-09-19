@@ -63,10 +63,10 @@ public class GridWritingCursor : IGridWriter
         => writer.WriteRowStyle(y + YOffset, style);
 
     /// <inheritdoc />
-    public void WriteColumn<T>(int x, int y, IEnumerable<T> content)
-        => writer.WriteColumn(x + XOffset, y + YOffset, content);
+    public void WriteColumn<T>(int x, int y, IEnumerable<T> content, OpenDocumentStyle? style = null)
+        => writer.WriteColumn(x + XOffset, y + YOffset, content, style);
 
     /// <inheritdoc />
-    public int WriteColumns<T>(int x, int y, IEnumerable<IEnumerable<T>> contents)
-        => writer.WriteColumns(x + XOffset, y + YOffset, contents);
+    public int WriteColumns<T>(int x, int y, IEnumerable<IEnumerable<T>> contents, OpenDocumentStyle? style = null)
+        => writer.WriteColumns(x + XOffset, y + YOffset, contents, style);
 }

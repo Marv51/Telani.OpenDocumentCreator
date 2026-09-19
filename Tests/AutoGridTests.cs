@@ -5,6 +5,9 @@ public sealed class AutoGridTests
 {
     private readonly OpenDocumentSpreadsheet doc = new();
 
+    private static readonly string[] LongColumn = ["a", "b", "c"];
+    private static readonly string[] ShortColumn = ["d", "e"];
+
     [TestMethod]
     public async Task SetColumnsWidthTest()
     {
@@ -88,6 +91,77 @@ public sealed class AutoGridTests
         ag.SetColumnsWidth(10, "50mm");
 
         Assert.AreEqual("Test-Table", doc.Tables.First().Name);
+        AssertRectangleGrid(ag);
+        await SaveDoc();
+    }
+
+    [TestMethod]
+    public async Task WriteColumnAppliesStyleToEveryCellTest()
+    {
+        var ag = SetupAutoGrid();
+        var style = new Styles.OpenDocumentStyle { Name = "ce_border" };
+
+        ag.WriteColumn(1, 2, LongColumn, style);
+
+        for (int i = 0; i < LongColumn.Length; i++)
+        {
+            var cell = ag.Rows[2 + i].ElementAt(1);
+            Assert.AreEqual(LongColumn[i], cell.Content);
+            Assert.AreSame(style, cell.Style);
+        }
+
+        // cells outside the written range keep their default style
+        Assert.IsNull(ag.Rows[1].ElementAt(1).Style);
+
+        AssertRectangleGrid(ag);
+        await SaveDoc();
+    }
+
+    [TestMethod]
+    public async Task WriteColumnWithoutStyleLeavesCellsUnstyledTest()
+    {
+        var ag = SetupAutoGrid();
+
+        ag.WriteColumn(1, 0, ShortColumn);
+
+        Assert.IsNull(ag.Rows[0].ElementAt(1).Style);
+        Assert.IsNull(ag.Rows[1].ElementAt(1).Style);
+
+        AssertRectangleGrid(ag);
+        await SaveDoc();
+    }
+
+    [TestMethod]
+    public async Task WriteColumnsAppliesStyleToEveryCellTest()
+    {
+        var ag = SetupAutoGrid();
+        var style = new Styles.OpenDocumentStyle { Name = "ce_border" };
+
+        var written = ag.WriteColumns(1, 1, [LongColumn, ShortColumn], style);
+
+        Assert.AreEqual(2, written);
+        Assert.AreSame(style, ag.Rows[3].ElementAt(1).Style);
+        Assert.AreSame(style, ag.Rows[2].ElementAt(2).Style);
+        Assert.AreEqual("e", ag.Rows[2].ElementAt(2).Content);
+
+        AssertRectangleGrid(ag);
+        await SaveDoc();
+    }
+
+    [TestMethod]
+    public async Task WriteColumnStylesContentWithoutCellWrapperTest()
+    {
+        // OpenDocumentFrame cannot be wrapped in an OpenDocumentCell by the caller,
+        // so the style overload is the only way to give those cells a border.
+        var ag = SetupAutoGrid();
+        var style = new Styles.OpenDocumentStyle { Name = "ce_border" };
+
+        ag.WriteColumn(0, 0, [new OpenDocumentFrame(), new OpenDocumentFrame()], style);
+
+        Assert.AreSame(style, ag.Rows[0].ElementAt(0).Style);
+        Assert.AreSame(style, ag.Rows[1].ElementAt(0).Style);
+        Assert.IsNotNull(ag.Rows[1].ElementAt(0).Frame);
+
         AssertRectangleGrid(ag);
         await SaveDoc();
     }

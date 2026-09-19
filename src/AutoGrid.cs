@@ -346,28 +346,31 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
     }
 
     /// <inheritdoc />
-    public void WriteColumn<T>(int x, int y, IEnumerable<T> content)
+    public void WriteColumn<T>(int x, int y, IEnumerable<T> content, OpenDocumentStyle? style = null)
     {
         if (x < 0 || x >= Columns.Count || y < 0)
         {
             throw new ArgumentException("Invalid Arguments: The indexes(" + x + ", " + y + ") should be greater than 0 and should not exceed table " + Name + " dimensions(" + Columns.Count + ", " + Rows.Count + ")");
         }
-        EnsureEnoughRows(content.Count() - 1 + y);
+        var values = content as IReadOnlyList<T> ?? content.ToList();
+        EnsureEnoughRows(values.Count - 1 + y);
 
-        for (int i = 0; i < content.Count(); i++)
+        for (int i = 0; i < values.Count; i++)
         {
-            WriteCell(x, i + y, content.ElementAt(i));
+            WriteCell(x, i + y, values[i], style);
         }
     }
 
     /// <inheritdoc />
-    public int WriteColumns<T>(int x, int y, IEnumerable<IEnumerable<T>> contents)
+    public int WriteColumns<T>(int x, int y, IEnumerable<IEnumerable<T>> contents, OpenDocumentStyle? style = null)
     {
+        var count = 0;
         foreach (var c in contents)
         {
-            WriteColumn(x, y, c);
+            WriteColumn(x, y, c, style);
             x++;
+            count++;
         }
-        return contents.Count();
+        return count;
     }
 }

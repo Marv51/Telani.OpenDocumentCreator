@@ -79,8 +79,9 @@ public interface IGridWriter
     /// <param name="x">the x coordinate of the first item</param>
     /// <param name="y">the y coordinate of all the items</param>
     /// <param name="content">the content to add</param>
+    /// <param name="style">the style that should be applied to every written cell</param>
     /// <typeparam name="T">The type of content to write.</typeparam>
-    void WriteColumn<T>(int x, int y, IEnumerable<T> content);
+    void WriteColumn<T>(int x, int y, IEnumerable<T> content, OpenDocumentStyle? style = null);
 
     /// <summary>
     /// Writes multiple columns to the grid. Different lengths are supported.
@@ -88,7 +89,8 @@ public interface IGridWriter
     /// <param name="x">the x-coordinate of the first item</param>
     /// <param name="y">the y-coordinate of the first item</param>
     /// <param name="contents">A collection of collections of items to write</param>
+    /// <param name="style">the style that should be applied to every written cell</param>
     /// <typeparam name="T">The type of content to write.</typeparam>
     /// <returns>Number of written columns</returns>
-    int WriteColumns<T>(int x, int y, IEnumerable<IEnumerable<T>> contents);
+    int WriteColumns<T>(int x, int y, IEnumerable<IEnumerable<T>> contents, OpenDocumentStyle? style = null);
 }
