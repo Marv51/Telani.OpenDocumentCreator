@@ -242,18 +242,52 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
     /// Way to change the Column styles to a predefined style after they are initialized
     /// </summary>
     /// <param name="x">the index of the column</param>
-    /// <param name="styles">the style to set</param>
+    /// <param name="styles">the name or names of the styles to set. These need to exist in the
+    /// document and, if they declare a family, be <see cref="StyleFamily.TableColumn"/> styles.</param>
+    /// <exception cref="ArgumentException">if the column index is outside of the acceptable range</exception>
+    /// <exception cref="InvalidOperationException">if a style is not found or is not a column style</exception>
     public void SetColumnsStyle(int x, params string[] styles)
     {
         foreach (string style in styles)
         {
-            if (x < 0 || x >= Columns.Count)
-            {
-                throw new ArgumentException("Invalid Column index " + x + " for table " + Name + " with " + Columns.Count + " columns");
-            }
-            var foundStyle = doc.Styles.Values.FirstOrDefault(s => s.Name == style) ?? throw new InvalidOperationException("The required style was not found");
+            RequireColumnIndex(x);
+            RequireStyle(style, StyleFamily.TableColumn);
             Columns[x].StyleName = style;
             x++;
+        }
+    }
+
+    /// <summary>
+    /// Throws unless the index addresses a column that exists on this table.
+    /// </summary>
+    /// <param name="x">the index of the column</param>
+    /// <exception cref="ArgumentException">if the index is outside of the acceptable range</exception>
+    private void RequireColumnIndex(int x)
+    {
+        if (x < 0 || x >= Columns.Count)
+        {
+            throw new ArgumentException("Invalid Column index " + x + " for table " + Name + " with " + Columns.Count + " columns");
+        }
+    }
+
+    /// <summary>
+    /// Looks up a style by name and checks that it is usable in the given role.
+    ///
+    /// <see cref="OpenDocumentStyle.Family"/> is optional, so a style that declares no
+    /// family at all is accepted for any role; only a style that declares a different
+    /// family is rejected.
+    /// </summary>
+    /// <param name="styleName">the name of the style to look up</param>
+    /// <param name="family">the family the style has to belong to, if it declares one</param>
+    /// <exception cref="InvalidOperationException">if the style does not exist or belongs to another family</exception>
+    private void RequireStyle(string styleName, StyleFamily family)
+    {
+        var foundStyle = doc.Styles.Values.FirstOrDefault(s => s.Name == styleName)
+            ?? throw new InvalidOperationException("The required style " + styleName + " was not found for table " + Name);
+
+        if (foundStyle.Family is not null && foundStyle.Family != family)
+        {
+            throw new InvalidOperationException("The style " + styleName + " is a " + foundStyle.Family + " style, but a " + family + " style is required here");
         }
     }
 
@@ -275,15 +309,8 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
         EnsureEnoughColumns(x + styles.Length - 1);
         foreach (string style in styles)
         {
-            if (x < 0 || x >= Columns.Count)
-            {
-                throw new ArgumentException("Invalid Column index " + x + " for table " + Name + " with " + Columns.Count + " columns");
-            }
-            var foundStyle = doc.Styles.Values.FirstOrDefault(s => s.Name == style) ?? throw new InvalidOperationException("The required style was not found");
-            if (foundStyle.Family is not null && foundStyle.Family != StyleFamily.TableCell)
-            {
-                throw new InvalidOperationException("The style " + style + " is a " + foundStyle.Family + " style, but a default cell style has to be a " + StyleFamily.TableCell + " style");
-            }
+            RequireColumnIndex(x);
+            RequireStyle(style, StyleFamily.TableCell);
             Columns[x].DefaultCellStyleName = style;
             x++;
         }

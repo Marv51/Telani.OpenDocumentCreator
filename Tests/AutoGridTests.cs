@@ -167,6 +167,23 @@ public sealed class AutoGridTests
     }
 
     [TestMethod]
+    public void SetColumnsStyleRejectsWrongFamilyTest()
+    {
+        var ag = SetupAutoGrid();
+        doc.Styles.Add("ce_wrong_family", new Styles.OpenDocumentStyle
+        {
+            Name = "ce_wrong_family",
+            Family = DataTypes.StyleFamily.TableCell,
+        });
+
+        var before = ag.Columns[1].StyleName;
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => ag.SetColumnsStyle(1, "ce_wrong_family"));
+
+        Assert.AreEqual(before, ag.Columns[1].StyleName, "a rejected style must not be applied");
+    }
+
+    [TestMethod]
     public async Task SetColumnsDefaultCellStyleTest()
     {
         var ag = SetupAutoGrid();
@@ -182,7 +199,7 @@ public sealed class AutoGridTests
         Assert.AreEqual("ce_border", ag.Columns[2].DefaultCellStyleName);
         Assert.AreEqual("ce1", ag.Columns[0].DefaultCellStyleName, "untouched columns keep the default");
 
-        StringAssert.Contains(await SaveDocAndReadContentXml(), "table:default-cell-style-name=\"ce_border\"");
+        Assert.Contains("table:default-cell-style-name=\"ce_border\"", await SaveDocAndReadContentXml());
 
         AssertRectangleGrid(ag);
     }
