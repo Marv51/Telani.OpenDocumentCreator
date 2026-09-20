@@ -89,7 +89,8 @@ public static class AutoColumnProcessor
 
     private static Measurement ParseMeasurement(string v)
     {
-        var result = decimal.Parse(v[0..^2], CultureInfo.InvariantCulture);
+        // AsSpan, not a range index: the range would cut a new string out just to parse it.
+        var result = decimal.Parse(v.AsSpan(0, v.Length - 2), CultureInfo.InvariantCulture);
         return new Measurement(result, Unit.MM);
     }
 }

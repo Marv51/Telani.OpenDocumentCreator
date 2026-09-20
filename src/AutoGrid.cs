@@ -232,7 +232,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
             var properties = new TableColumnProperties
             {
                 BreakBefore = BreakValue.Auto,
-                ColumnWidth = new Measurement(decimal.Parse(width[0..^2], CultureInfo.InvariantCulture), Unit.MM),
+                ColumnWidth = new Measurement(decimal.Parse(width.AsSpan(0, width.Length - 2), CultureInfo.InvariantCulture), Unit.MM),
             };
 
             Columns[x].StyleName = this.doc.GetOrAddTableColumnStyle(properties).Name;
