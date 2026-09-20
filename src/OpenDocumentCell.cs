@@ -41,7 +41,8 @@ public class OpenDocumentCell
     /// ODF names the value type "float", but declares office:value as xs:double, so this is a
     /// double: values are stored with the full precision the format allows.
     /// </summary>
-    public double? FloatContent { get; set; }
+    // VALIDATION BRANCH: float restored to match 1.0.4 (#6).
+    public float? FloatContent { get; set; }
 
     /// <summary>
     /// The formula of this cell. (You also need to set the FloatContent or Content with the result)
@@ -107,7 +108,7 @@ public class OpenDocumentCell
     /// Initializes a new instance of the <see cref="OpenDocumentCell"/> class.
     /// </summary>
     /// <param name="c"></param>
-    public OpenDocumentCell(double c) => FloatContent = c;
+    public OpenDocumentCell(double c) => FloatContent = Convert.ToSingle(c);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OpenDocumentCell"/> class.
@@ -165,17 +166,17 @@ public class OpenDocumentCell
     /// </summary>
     /// <param name="value">the value to format</param>
     /// <returns>the lexical representation for office:value</returns>
-    private static string FormatCellValue(double value)
+    private static string FormatCellValue(float value)
     {
-        if (double.IsPositiveInfinity(value))
+        if (float.IsPositiveInfinity(value))
         {
             return "INF";
         }
-        if (double.IsNegativeInfinity(value))
+        if (float.IsNegativeInfinity(value))
         {
             return "-INF";
         }
-        if (double.IsNaN(value))
+        if (float.IsNaN(value))
         {
             return "NaN";
         }

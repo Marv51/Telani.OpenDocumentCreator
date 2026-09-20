@@ -671,7 +671,8 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
         // written explicitly.
         var settings = new XmlWriterSettings
         {
-            Indent = false,
+            // VALIDATION BRANCH: indentation restored to match 1.0.4 byte for byte (#17).
+            Indent = true,
             CloseOutput = false,
             Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         };

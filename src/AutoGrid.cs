@@ -134,7 +134,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
                         target_cell.Content = strVal;
                         break;
                     case double dblVal:
-                        target_cell.FloatContent = dblVal;
+                        target_cell.FloatContent = Convert.ToSingle(dblVal);
                         break;
                     case Uri uriVal:
                         target_cell.Link = uriVal;
