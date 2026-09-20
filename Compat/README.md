@@ -88,6 +88,14 @@ So the generator covers, instead:
   style that AutoGrid never sets
 - the **document font**, which lands in `style:font-name`
 - links that are `mailto:`, relative, or carry characters outside ASCII
+- `AutoColumnProcessor`, the other way to put columns on a table, through both its template string
+  parser and its column count form; it makes the column styles itself and shares one between
+  columns of equal width
+- the **long tail of style properties**: every group's members rather than a handful, including the
+  table properties, the master page name, the remaining borders and diagonals, and the Asian and
+  complex text properties
+- cells carrying **several kinds of content at once**, which the writer resolves by precedence
+  rather than by writing all of them
 
 The second half of that list came from reading a real caller of this library rather than from
 guessing. It writes its spans on the cell and hardly ever calls `SetCellSpan`, it fills rows
@@ -113,8 +121,12 @@ The corpus matters more than the count. An early run of 2000 documents also repo
 identical - and then reported everything identical again with the space encoder deliberately
 broken, because nothing it generated ended in a *run* of spaces.
 
+One number is worth watching: how many distinct attribute names the corpus makes the writer emit.
+It is 144. If a property is added to the library and nothing here sets it, that figure does not
+move, and no number of extra documents will notice the gap - only widening the generator will.
+
 A comparison that cannot fail is not evidence. Break something on purpose before trusting a clean
-run. Three that the corpus catches:
+run. Those the corpus catches:
 
 | deliberate break | documents differing, of 500 |
 |---|---|
@@ -125,6 +137,9 @@ run. Three that the corpus catches:
 | measurements formatted `0.##` instead of round trip | 416 |
 | spaces in a table name escaped to `-` instead of `_` | 149 |
 | one letter changed in the text document's content | 40 |
+| a formula taking precedence over a link on the same cell | 282 |
+| `AutoColumnProcessor` reading its widths as cm rather than mm | 454 |
+| `style:master-page-name` written as `style:master-page` | 444 |
 
 Every one of those is reachable only because the corpus sets the property in question. Each of them
 passed unnoticed against an earlier version of this corpus.

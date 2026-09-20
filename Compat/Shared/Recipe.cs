@@ -124,50 +124,233 @@ internal sealed record StyleRecipe(
     StyleTarget Family,
     string? ParentName,
     string? DataStyleName,
+    string? MasterPageName,
     CellProps? Cell,
     ParagraphProps? Paragraph,
     TextProps? Text,
     ColumnProps? Column,
     RowProps? Row,
+    TableProps? Table,
     GraphicProps? Graphic);
 
-internal sealed record CellProps(
-    LineRecipe? Border,
-    LineRecipe? BorderLeft,
-    LineRecipe? BorderTop,
-    LineRecipe? Diagonal,
-    ColorRecipe? BackgroundColor,
-    int? VerticalAlign,
-    int? WrapOption,
-    int? TextAlignSource,
-    int? CellProtect,
-    int? RotationAlign,
-    string? RotationAngle,
-    string? Padding,
-    string? PaddingLeft,
-    string? DecimalPlaces,
-    int? ShrinkToFit,
-    int? PrintContent);
+/// <summary>
+/// The properties of a style, one class per properties element. They are classes with init only
+/// members rather than positional records because there are a great many of them and most are
+/// left unset in any one style; null means the property is not written.
+/// </summary>
+internal sealed class CellProps
+{
+    public LineRecipe? Border { get; init; }
 
-internal sealed record ParagraphProps(int? TextAlign, MeasureRecipe? MarginLeft, string? LineBreak);
+    public LineRecipe? BorderBottom { get; init; }
 
-internal sealed record TextProps(
-    int? FontWeight,
-    int? FontStyle,
-    MeasureRecipe? FontSize,
-    string? FontFamily,
-    ColorRecipe? Color,
-    ColorRecipe? BackgroundColor,
-    string? Language,
-    int? UnderlineStyle,
-    string? LetterSpacing);
+    public LineRecipe? BorderLeft { get; init; }
 
-internal sealed record ColumnProps(MeasureRecipe? ColumnWidth, int? UseOptimal, int? BreakBefore, string? RelativeColumnWidth);
+    public LineRecipe? BorderRight { get; init; }
 
-internal sealed record RowProps(MeasureRecipe? RowHeight, MeasureRecipe? MinRowHeight, int? UseOptimal, ColorRecipe? BackgroundColor, int? BreakBefore);
+    public LineRecipe? BorderTop { get; init; }
 
-internal sealed record GraphicProps(int? Fill, ColorRecipe? FillColor, int? Stroke, MeasureRecipe? StrokeWidth, ColorRecipe? StrokeColor, string? Opacity);
+    public LineRecipe? DiagonalTopLeftBottomRight { get; init; }
 
+    public LineRecipe? DiagonalTopLeftBottomRightWidths { get; init; }
+
+    public LineRecipe? DiagonalBottomLeftTopRight { get; init; }
+
+    public LineRecipe? DiagonalBottomLeftTopRightWidths { get; init; }
+
+    public ColorRecipe? BackgroundColor { get; init; }
+
+    public int? VerticalAlign { get; init; }
+
+    public int? WrapOption { get; init; }
+
+    public int? TextAlignSource { get; init; }
+
+    public int? CellProtect { get; init; }
+
+    public int? RotationAlign { get; init; }
+
+    public int? Direction { get; init; }
+
+    public int? WritingMode { get; init; }
+
+    public int? ShrinkToFit { get; init; }
+
+    public int? PrintContent { get; init; }
+
+    public int? RepeatContent { get; init; }
+
+    public string? RotationAngle { get; init; }
+
+    public string? Padding { get; init; }
+
+    public string? PaddingBottom { get; init; }
+
+    public string? PaddingLeft { get; init; }
+
+    public string? PaddingRight { get; init; }
+
+    public string? PaddingTop { get; init; }
+
+    public string? BorderLineWidth { get; init; }
+
+    public string? BorderLineWidthBottom { get; init; }
+
+    public string? BorderLineWidthTop { get; init; }
+
+    public string? DecimalPlaces { get; init; }
+
+    public string? GlyphOrientationVertical { get; init; }
+
+    public string? Shadow { get; init; }
+}
+
+internal sealed class ParagraphProps
+{
+    public int? TextAlign { get; init; }
+
+    public MeasureRecipe? MarginLeft { get; init; }
+
+    public string? LineBreak { get; init; }
+}
+
+internal sealed class TextProps
+{
+    public int? FontWeight { get; init; }
+
+    public int? FontStyle { get; init; }
+
+    public int? UnderlineStyle { get; init; }
+
+    public int? UnderlineType { get; init; }
+
+    public MeasureRecipe? FontSize { get; init; }
+
+    public MeasureRecipe? FontSizeAsian { get; init; }
+
+    public MeasureRecipe? FontSizeComplex { get; init; }
+
+    public ColorRecipe? Color { get; init; }
+
+    public ColorRecipe? BackgroundColor { get; init; }
+
+    public string? FontFamily { get; init; }
+
+    public string? FontName { get; init; }
+
+    public string? FontNameAsian { get; init; }
+
+    public string? FontNameComplex { get; init; }
+
+    public string? FontVariant { get; init; }
+
+    public string? FontCharset { get; init; }
+
+    public string? Language { get; init; }
+
+    public string? Country { get; init; }
+
+    public string? Script { get; init; }
+
+    public string? LetterSpacing { get; init; }
+
+    public string? TextTransform { get; init; }
+
+    public string? TextShadow { get; init; }
+
+    public string? Hyphenate { get; init; }
+
+    public string? HyphenationPushCharCount { get; init; }
+
+    public string? Display { get; init; }
+
+    public string? Condition { get; init; }
+}
+
+internal sealed class ColumnProps
+{
+    public MeasureRecipe? ColumnWidth { get; init; }
+
+    public int? UseOptimal { get; init; }
+
+    public int? BreakBefore { get; init; }
+
+    public int? BreakAfter { get; init; }
+
+    public string? RelativeColumnWidth { get; init; }
+}
+
+internal sealed class RowProps
+{
+    public MeasureRecipe? RowHeight { get; init; }
+
+    public MeasureRecipe? MinRowHeight { get; init; }
+
+    public int? UseOptimal { get; init; }
+
+    public int? BreakBefore { get; init; }
+
+    public int? BreakAfter { get; init; }
+
+    public ColorRecipe? BackgroundColor { get; init; }
+
+    public string? KeepTogether { get; init; }
+}
+
+internal sealed class TableProps
+{
+    public int? WritingMode { get; init; }
+
+    public int? Display { get; init; }
+}
+
+internal sealed class GraphicProps
+{
+    public int? Fill { get; init; }
+
+    public int? Stroke { get; init; }
+
+    public ColorRecipe? FillColor { get; init; }
+
+    public ColorRecipe? StrokeColor { get; init; }
+
+    public MeasureRecipe? StrokeWidth { get; init; }
+
+    public MeasureRecipe? PaddingTop { get; init; }
+
+    public MeasureRecipe? PaddingLeft { get; init; }
+
+    public string? Opacity { get; init; }
+
+    public string? StrokeOpacity { get; init; }
+
+    public string? StrokeLineCap { get; init; }
+
+    public string? StrokeLineJoin { get; init; }
+
+    public string? AutoGrowHeight { get; init; }
+
+    public string? ColorMode { get; init; }
+
+    public string? Contrast { get; init; }
+
+    public string? Gamma { get; init; }
+
+    public string? Luminance { get; init; }
+
+    public string? Mirror { get; init; }
+
+    public string? ImageOpacity { get; init; }
+
+    public string? TextareaHorizontalAlign { get; init; }
+}
+
+/// <summary>
+/// One write into the grid. <c>Extras</c> is a small bit set laid over whatever the kind already
+/// put in the cell: bit 0 adds a formula, bit 1 a link, bit 2 a frame, bit 3 a text content. The
+/// cell writer decides between those by precedence rather than writing all of them, so the
+/// combinations are what pins that order down.
+/// </summary>
 internal sealed record CellStep(
     int X,
     int Y,
@@ -180,7 +363,8 @@ internal sealed record CellStep(
     FrameRecipe Frame,
     int ColumnsSpanned,
     int RowsSpanned,
-    bool IsCovered);
+    bool IsCovered,
+    int Extras);
 
 /// <summary>
 /// A frame, whether it hangs off a cell or off the table's shapes.
@@ -202,6 +386,16 @@ internal sealed record FrameRecipe(
     string Text);
 
 /// <summary>
+/// A use of AutoColumnProcessor, which is the other way to put columns on a table: it turns widths
+/// into generated column styles itself, sharing one style between columns of equal width.
+/// </summary>
+/// <param name="FromTemplate">parse a template string rather than asking for a count</param>
+/// <param name="Template">the template, when parsing one</param>
+/// <param name="Count">how many columns, when not</param>
+/// <param name="Width">how wide they are, when not</param>
+internal sealed record AutoColumnSpec(bool FromTemplate, string Template, int Count, string Width);
+
+/// <summary>
 /// A column added to the table by hand, rather than one AutoGrid made.
 /// </summary>
 internal sealed record ColumnRecipe(string? StyleName, string? DefaultCellStyleName, string Repeat, int? Visibility);
@@ -220,6 +414,7 @@ internal sealed record BulkStep(BulkKind Kind, RowBuild Build, int X, int Y, IRe
 internal sealed record TableRecipe(
     string Name,
     string? StyleName,
+    AutoColumnSpec? AutoColumns,
     IReadOnlyList<FrameRecipe> Shapes,
     IReadOnlyList<ColumnRecipe> ManualColumns,
     int Rows,
@@ -305,6 +500,52 @@ internal sealed record Recipe(
         "with  two  spaces",
     ];
 
+    /// <summary>
+    /// Template strings for AutoColumnProcessor. A width is a number and a two character unit; the
+    /// parser takes the unit as millimetres whatever it says, and tolerates spaces around the bar.
+    /// </summary>
+    private static readonly string[] Templates =
+    [
+        "|60mm|20mm|60mm|60mm|40mm|30mm|",
+        " | 12mm | 12mm | 12mm | ",
+        "|0mm|",
+        "|1234.25mm|0.5mm|1234.25mm|",
+        "|7mm|7mm|7mm|7mm|7mm|7mm|7mm|7mm|",
+        "|20mm|",
+    ];
+
+    private static readonly string[] MasterPages = ["Default", "PageStyle_Sheet1", "Report"];
+
+    private static readonly string[] LineWidths = ["0.05pt 0.05pt 0.05pt", "0.5mm 1mm 0.5mm", "thin"];
+
+    private static readonly string[] Shadows = ["none", "#808080 0.18cm 0.18cm"];
+
+    private static readonly string[] Variants = ["normal", "small-caps"];
+
+    private static readonly string[] Charsets = ["x-symbol", "iso-8859-1"];
+
+    private static readonly string[] Countries = ["DE", "AT", "none"];
+
+    private static readonly string[] Scripts = ["Latn", "Arab"];
+
+    private static readonly string[] Transforms = ["none", "uppercase", "lowercase", "capitalize"];
+
+    private static readonly string[] Booleans = ["true", "false"];
+
+    private static readonly string[] Displays = ["true", "none"];
+
+    private static readonly string[] Conditions = ["none"];
+
+    private static readonly string[] LineCaps = ["butt", "round", "square"];
+
+    private static readonly string[] LineJoins = ["miter", "round", "bevel"];
+
+    private static readonly string[] ColorModes = ["standard", "greyscale", "mono", "watermark"];
+
+    private static readonly string[] Mirrors = ["none", "horizontal", "vertical"];
+
+    private static readonly string[] Aligns = ["left", "center", "right", "justify"];
+
     private static readonly string[] DataStyles = ["N0", "N2", "N109"];
 
     private static readonly string[] Angles = ["0", "90", "270"];
@@ -387,71 +628,139 @@ internal sealed record Recipe(
                 family,
                 parent,
                 random.Next(0, 3) == 0 ? DataStyles[random.Next(DataStyles.Length)] : null,
+                random.Next(0, 4) == 0 ? MasterPages[random.Next(MasterPages.Length)] : null,
                 family == StyleTarget.TableCell ? CellProperties(random) : null,
                 family is StyleTarget.TableCell or StyleTarget.Paragraph ? ParagraphProperties(random) : null,
                 family is StyleTarget.TableCell or StyleTarget.Paragraph ? TextProperties(random) : null,
                 family == StyleTarget.TableColumn ? ColumnProperties(random) : null,
                 family == StyleTarget.TableRow ? RowProperties(random) : null,
+                family == StyleTarget.Table ? TableProperties(random) : null,
                 family == StyleTarget.Graphic ? GraphicProperties(random) : null));
         }
 
         return styles;
     }
 
-    private static CellProps CellProperties(Random random) => new(
-        MaybeLine(random),
-        MaybeLine(random),
-        MaybeLine(random),
-        MaybeLine(random),
-        MaybeColor(random),
-        MaybeEnum(random),
-        MaybeEnum(random),
-        MaybeEnum(random),
-        MaybeEnum(random),
-        MaybeEnum(random),
-        MaybeOne(random, Angles),
-        MaybeOne(random, Paddings),
-        MaybeOne(random, Paddings),
-        MaybeOne(random, Counts),
-        MaybeEnum(random),
-        MaybeEnum(random));
+    private static CellProps CellProperties(Random random) => new()
+    {
+        Border = MaybeLine(random),
+        BorderBottom = MaybeLine(random),
+        BorderLeft = MaybeLine(random),
+        BorderRight = MaybeLine(random),
+        BorderTop = MaybeLine(random),
+        DiagonalTopLeftBottomRight = MaybeLine(random),
+        DiagonalTopLeftBottomRightWidths = MaybeLine(random),
+        DiagonalBottomLeftTopRight = MaybeLine(random),
+        DiagonalBottomLeftTopRightWidths = MaybeLine(random),
+        BackgroundColor = MaybeColor(random),
+        VerticalAlign = MaybeEnum(random),
+        WrapOption = MaybeEnum(random),
+        TextAlignSource = MaybeEnum(random),
+        CellProtect = MaybeEnum(random),
+        RotationAlign = MaybeEnum(random),
+        Direction = MaybeEnum(random),
+        WritingMode = MaybeEnum(random),
+        ShrinkToFit = MaybeEnum(random),
+        PrintContent = MaybeEnum(random),
+        RepeatContent = MaybeEnum(random),
+        RotationAngle = MaybeOne(random, Angles),
+        Padding = MaybeOne(random, Paddings),
+        PaddingBottom = MaybeOne(random, Paddings),
+        PaddingLeft = MaybeOne(random, Paddings),
+        PaddingRight = MaybeOne(random, Paddings),
+        PaddingTop = MaybeOne(random, Paddings),
+        BorderLineWidth = MaybeOne(random, LineWidths),
+        BorderLineWidthBottom = MaybeOne(random, LineWidths),
+        BorderLineWidthTop = MaybeOne(random, LineWidths),
+        DecimalPlaces = MaybeOne(random, Counts),
+        GlyphOrientationVertical = MaybeOne(random, Angles),
+        Shadow = MaybeOne(random, Shadows),
+    };
 
-    private static ParagraphProps ParagraphProperties(Random random) => new(
-        MaybeEnum(random),
-        MaybeMeasure(random),
-        MaybeOne(random, Counts));
+    private static ParagraphProps ParagraphProperties(Random random) => new()
+    {
+        TextAlign = MaybeEnum(random),
+        MarginLeft = MaybeMeasure(random),
+        LineBreak = MaybeOne(random, Counts),
+    };
 
-    private static TextProps TextProperties(Random random) => new(
-        MaybeEnum(random),
-        MaybeEnum(random),
-        MaybeMeasure(random),
-        MaybeOne(random, Fonts),
-        MaybeColor(random),
-        MaybeColor(random),
-        MaybeOne(random, Languages),
-        MaybeEnum(random),
-        MaybeOne(random, Paddings));
+    private static TextProps TextProperties(Random random) => new()
+    {
+        FontWeight = MaybeEnum(random),
+        FontStyle = MaybeEnum(random),
+        UnderlineStyle = MaybeEnum(random),
+        UnderlineType = MaybeEnum(random),
+        FontSize = MaybeMeasure(random),
+        FontSizeAsian = MaybeMeasure(random),
+        FontSizeComplex = MaybeMeasure(random),
+        Color = MaybeColor(random),
+        BackgroundColor = MaybeColor(random),
+        FontFamily = MaybeOne(random, Fonts),
+        FontName = MaybeOne(random, Fonts),
+        FontNameAsian = MaybeOne(random, Fonts),
+        FontNameComplex = MaybeOne(random, Fonts),
+        FontVariant = MaybeOne(random, Variants),
+        FontCharset = MaybeOne(random, Charsets),
+        Language = MaybeOne(random, Languages),
+        Country = MaybeOne(random, Countries),
+        Script = MaybeOne(random, Scripts),
+        LetterSpacing = MaybeOne(random, Paddings),
+        TextTransform = MaybeOne(random, Transforms),
+        TextShadow = MaybeOne(random, Shadows),
+        Hyphenate = MaybeOne(random, Booleans),
+        HyphenationPushCharCount = MaybeOne(random, Counts),
+        Display = MaybeOne(random, Displays),
+        Condition = MaybeOne(random, Conditions),
+    };
 
-    private static ColumnProps ColumnProperties(Random random) => new(
-        MaybeMeasure(random),
-        MaybeEnum(random),
-        MaybeEnum(random),
-        MaybeOne(random, RelativeWidths));
+    private static ColumnProps ColumnProperties(Random random) => new()
+    {
+        ColumnWidth = MaybeMeasure(random),
+        UseOptimal = MaybeEnum(random),
+        BreakBefore = MaybeEnum(random),
+        BreakAfter = MaybeEnum(random),
+        RelativeColumnWidth = MaybeOne(random, RelativeWidths),
+    };
 
-    private static RowProps RowProperties(Random random) => new(
-        MaybeMeasure(random),
-        MaybeMeasure(random),
-        MaybeEnum(random),
-        MaybeColor(random),
-        MaybeEnum(random));
+    private static RowProps RowProperties(Random random) => new()
+    {
+        RowHeight = MaybeMeasure(random),
+        MinRowHeight = MaybeMeasure(random),
+        UseOptimal = MaybeEnum(random),
+        BreakBefore = MaybeEnum(random),
+        BreakAfter = MaybeEnum(random),
+        BackgroundColor = MaybeColor(random),
+        KeepTogether = MaybeOne(random, Booleans),
+    };
 
-    private static GraphicProps GraphicProperties(Random random) => new(
-        MaybeEnum(random),
-        MaybeColor(random),
-        MaybeEnum(random),
-        MaybeMeasure(random),
-        MaybeColor(random),
-        MaybeOne(random, Opacities));
+    private static TableProps TableProperties(Random random) => new()
+    {
+        WritingMode = MaybeEnum(random),
+        Display = MaybeEnum(random),
+    };
+
+    private static GraphicProps GraphicProperties(Random random) => new()
+    {
+        Fill = MaybeEnum(random),
+        Stroke = MaybeEnum(random),
+        FillColor = MaybeColor(random),
+        StrokeColor = MaybeColor(random),
+        StrokeWidth = MaybeMeasure(random),
+        PaddingTop = MaybeMeasure(random),
+        PaddingLeft = MaybeMeasure(random),
+        Opacity = MaybeOne(random, Opacities),
+        StrokeOpacity = MaybeOne(random, Opacities),
+        StrokeLineCap = MaybeOne(random, LineCaps),
+        StrokeLineJoin = MaybeOne(random, LineJoins),
+        AutoGrowHeight = MaybeOne(random, Booleans),
+        ColorMode = MaybeOne(random, ColorModes),
+        Contrast = MaybeOne(random, Opacities),
+        Gamma = MaybeOne(random, Opacities),
+        Luminance = MaybeOne(random, Opacities),
+        Mirror = MaybeOne(random, Mirrors),
+        ImageOpacity = MaybeOne(random, Opacities),
+        TextareaHorizontalAlign = MaybeOne(random, Aligns),
+    };
 
     /// <summary>
     /// An index into a library enum, or null to leave that property unset. Build reduces the index
@@ -534,6 +843,16 @@ internal sealed record Recipe(
                 random.Next(0, 2) == 0 ? null : random.Next(0, 6)));
         }
 
+        // Templates are deliberately repetitive: equal widths have to collapse onto one
+        // generated style, which is the part of this worth comparing.
+        AutoColumnSpec? auto = random.Next(0, 3) == 0
+            ? new AutoColumnSpec(
+                random.Next(0, 2) == 0,
+                Templates[random.Next(Templates.Length)],
+                random.Next(1, 8),
+                Widths[random.Next(Widths.Length)])
+            : null;
+
         var shapes = new List<FrameRecipe>();
         for (var i = 0; i < random.Next(0, 3); i++)
         {
@@ -563,7 +882,8 @@ internal sealed record Recipe(
                 // calling SetCellSpan, so both routes are worth having.
                 random.Next(0, 8) == 0 ? random.Next(1, 4) : 1,
                 random.Next(0, 10) == 0 ? random.Next(1, 3) : 1,
-                random.Next(0, 12) == 0));
+                random.Next(0, 12) == 0,
+                random.Next(0, 4) == 0 ? random.Next(1, 16) : 0));
         }
 
         var spans = new List<SpanStep>();
@@ -589,6 +909,7 @@ internal sealed record Recipe(
         return new TableRecipe(
             TableName(random, index),
             tableStyleCount == 0 || random.Next(0, 3) == 0 ? null : "ta_" + random.Next(0, tableStyleCount),
+            auto,
             shapes,
             manual,
             rows,
