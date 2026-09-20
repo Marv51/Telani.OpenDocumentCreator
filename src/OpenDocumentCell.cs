@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Buffers;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Xml;
@@ -153,48 +154,6 @@ public class OpenDocumentCell
         return lines;
     }
 
-    private static XNode[] EncodeTextContent(string the_text)
-    {
-        // fast path: no double spaces (the string literal is two spaces)
-        if (!the_text.Contains("  "))
-        {
-            return [new XText(the_text)];
-        }
-
-        var elems = new List<XNode>();
-        var builder = new StringBuilder();
-        var numberOfPreviousSpaces = 0;
-
-        for (var i = 0; i < the_text.Length; i++)
-        {
-            if (the_text[i] == ' ')
-            {
-                if (numberOfPreviousSpaces == 0)
-                {
-                    builder.Append(' ');
-                }
-                numberOfPreviousSpaces++;
-            }
-            else
-            {
-                if (numberOfPreviousSpaces > 1)
-                {
-                    elems.Add(new XText(builder.ToString()));
-
-                    elems.Add(new XElement(Text + "s", new XAttribute(Text + "c", numberOfPreviousSpaces - 1)));
-                    builder.Clear();
-                }
-                numberOfPreviousSpaces = 0;
-                builder.Append(the_text[i]);
-            }
-        }
-        if (builder.Length > 0)
-        {
-            elems.Add(new XText(builder.ToString()));
-        }
-
-        return [.. elems];
-    }
 
     /// <summary>
     /// Formats a value for the office:value attribute.
@@ -345,30 +304,94 @@ public class OpenDocumentCell
     }
 
     /// <summary>
-    /// Writes one text:p, encoding runs of spaces as text:s exactly as the element model does.
+    /// Writes one text:p.
     /// </summary>
+    /// <param name="writer">the writer to write to</param>
+    /// <param name="content">the paragraph text</param>
     private static void WriteParagraph(XmlWriter writer, string content)
     {
         writer.WriteStartElement("text", "p", Text.NamespaceName);
-        foreach (var node in EncodeTextContent(content))
+        WriteEncodedText(writer, content);
+        writer.WriteEndElement();
+    }
+
+    /// <summary>
+    /// Writes text, carrying runs of more than one space as text:s elements.
+    /// </summary>
+    /// <param name="writer">the writer to write to</param>
+    /// <param name="text">the text to write</param>
+    /// <remarks>
+    /// A single space stays literal; a run of n spaces is written as one space followed by a
+    /// text:s with a count of n-1, which is how the format keeps them from being collapsed.
+    ///
+    /// The segments are handed to the writer as spans of the original string, so nothing is
+    /// copied. This used to build a list of XText and XElement nodes and a StringBuilder first,
+    /// which cost over a kilobyte for a cell holding a couple of double spaces.
+    /// </remarks>
+    private static void WriteEncodedText(XmlWriter writer, string text)
+    {
+        // fast path: no double spaces (the string literal is two spaces)
+        if (!text.Contains("  ", StringComparison.Ordinal))
         {
-            if (node is XElement spaceRun)
+            writer.WriteString(text);
+            return;
+        }
+
+        // WriteChars escapes exactly as WriteString does, and takes a range, so the segments can
+        // be written out of one pooled buffer instead of being cut out as separate strings.
+        var buffer = ArrayPool<char>.Shared.Rent(text.Length);
+        try
+        {
+            text.CopyTo(buffer);
+            var span = text.AsSpan();
+
+            var segmentStart = 0;
+            var i = 0;
+
+            while (i < span.Length)
             {
-                writer.WriteStartElement("text", spaceRun.Name.LocalName, Text.NamespaceName);
-                foreach (var attribute in spaceRun.Attributes())
+                if (span[i] != ' ')
                 {
-                    writer.WriteAttributeString("text", attribute.Name.LocalName, Text.NamespaceName, attribute.Value);
+                    i++;
+                    continue;
                 }
+
+                var runStart = i;
+                while (i < span.Length && span[i] == ' ')
+                {
+                    i++;
+                }
+
+                if (i - runStart <= 1)
+                {
+                    continue;
+                }
+
+                // the run's first space stays with the text before it
+                writer.WriteChars(buffer, segmentStart, runStart + 1 - segmentStart);
+
+                if (i == span.Length)
+                {
+                    // A run that ends the text is written as that one space and no more, which is
+                    // what this produced when it went through the element model.
+                    return;
+                }
+
+                writer.WriteStartElement("text", "s", Text.NamespaceName);
+                writer.WriteAttributeString("text", "c", Text.NamespaceName, (i - runStart - 1).ToString(CultureInfo.InvariantCulture));
                 writer.WriteEndElement();
+                segmentStart = i;
             }
-            else if (node is XText text)
+
+            if (segmentStart < span.Length)
             {
-                // Value, not ToString: ToString serializes the node through a writer of its own,
-                // which both escapes the text a second time and allocates a writer per text node.
-                writer.WriteString(text.Value);
+                writer.WriteChars(buffer, segmentStart, span.Length - segmentStart);
             }
         }
-        writer.WriteEndElement();
+        finally
+        {
+            ArrayPool<char>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>
