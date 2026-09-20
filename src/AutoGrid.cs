@@ -324,10 +324,13 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
     /// <inheritdoc />
     public int WriteRows(int x, int y, IEnumerable<Row> rows)
     {
-        var length = rows.Count();
+        // Counting and then iterating walked the sequence twice. For a lazily produced source
+        // that re-runs the whole query, and the rows written are then not the rows counted.
+        var materialized = rows as IReadOnlyList<Row> ?? [.. rows];
+        var length = materialized.Count;
         EnsureEnoughRows(y + length - 1);
 
-        foreach (Row row in rows)
+        foreach (Row row in materialized)
         {
             EnsureEnoughColumns(x + row.Count - 1);
             WriteRowInternal(x, y, row);
