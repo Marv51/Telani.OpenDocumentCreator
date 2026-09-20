@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Xml.Linq;
 using BenchmarkDotNet.Attributes;
 
@@ -13,7 +13,9 @@ namespace OpenDocumentCreator.Benchmarks;
 /// already built and only write it, so the difference from the full save is roughly what building
 /// the tree costs.
 /// </summary>
-[ShortRunJob]
+// Deliberately on the default job rather than ShortRunJob. ShortRunJob runs three iterations,
+// which on cases this fast produced confidence intervals wider than the mean; the full job costs
+// a few minutes more across the suite and is roughly fifty times tighter.
 [MemoryDiagnoser]
 public class SavePhaseBenchmarks
 {

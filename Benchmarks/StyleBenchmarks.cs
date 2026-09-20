@@ -1,4 +1,4 @@
-using BenchmarkDotNet.Attributes;
+﻿using BenchmarkDotNet.Attributes;
 using OpenDocumentCreator.DataTypes;
 using OpenDocumentCreator.Styles;
 
@@ -11,7 +11,9 @@ namespace OpenDocumentCreator.Benchmarks;
 /// existing style by scanning the whole style dictionary, so the cost of setting a fixed number
 /// of widths grows with how many styles the document already holds.
 /// </summary>
-[ShortRunJob]
+// Deliberately on the default job rather than ShortRunJob. ShortRunJob runs three iterations,
+// which on cases this fast produced confidence intervals wider than the mean; the full job costs
+// a few minutes more across the suite and is roughly fifty times tighter.
 [MemoryDiagnoser]
 public class StyleBenchmarks
 {

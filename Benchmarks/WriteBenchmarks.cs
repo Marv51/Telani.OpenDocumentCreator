@@ -1,4 +1,4 @@
-using BenchmarkDotNet.Attributes;
+﻿using BenchmarkDotNet.Attributes;
 
 namespace OpenDocumentCreator.Benchmarks;
 
@@ -8,7 +8,9 @@ namespace OpenDocumentCreator.Benchmarks;
 /// <see cref="WriteCellsIntoExistingTable"/> keeps the number of writes fixed while varying how
 /// many rows the table already has, so it isolates per write work that depends on the row count.
 /// </summary>
-[ShortRunJob]
+// Deliberately on the default job rather than ShortRunJob. ShortRunJob runs three iterations,
+// which on cases this fast produced confidence intervals wider than the mean; the full job costs
+// a few minutes more across the suite and is roughly fifty times tighter.
 [MemoryDiagnoser]
 public class WriteCellBenchmarks
 {
@@ -62,7 +64,6 @@ public class WriteCellBenchmarks
 /// enumerates it again, so a lazily produced source is materialized twice. The two benchmarks
 /// differ only in whether the caller hands over a list or a lazy sequence.
 /// </summary>
-[ShortRunJob]
 [MemoryDiagnoser]
 public class WriteRowsBenchmarks
 {

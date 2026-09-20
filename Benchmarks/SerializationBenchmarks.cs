@@ -1,4 +1,4 @@
-using BenchmarkDotNet.Attributes;
+﻿using BenchmarkDotNet.Attributes;
 
 namespace OpenDocumentCreator.Benchmarks;
 
@@ -9,7 +9,9 @@ namespace OpenDocumentCreator.Benchmarks;
 /// <see cref="OpenDocumentWritable"/>, so this covers the per element serialization cost as well
 /// as the zipping.
 /// </summary>
-[ShortRunJob]
+// Deliberately on the default job rather than ShortRunJob. ShortRunJob runs three iterations,
+// which on cases this fast produced confidence intervals wider than the mean; the full job costs
+// a few minutes more across the suite and is roughly fifty times tighter.
 [MemoryDiagnoser]
 public class SerializationBenchmarks
 {
