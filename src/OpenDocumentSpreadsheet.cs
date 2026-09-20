@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace OpenDocumentCreator;
@@ -21,21 +22,7 @@ public sealed class OpenDocumentSpreadsheet(string creatorName = "") : OpenDocum
     /// <inheritdoc />
     protected override XElement CreateContent()
     {
-        // at least one table is required
-        if (Tables.Count == 0)
-        {
-            throw new InvalidOperationException("At least one table is required to generate a valid ods file");
-        }
-
-        // LibreOffice supports at most 10000 sheets.
-
-        // Check if any tables have the same name
-        if (Tables.Select(s => s.Name).Distinct().Count() != Tables.Count)
-        {
-            // Lets get a good error message
-            var duplicate = Tables.GroupBy(x => x.Name).Where(g => g.Count() > 1).First();
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Table Names must be distinct. (Two or more tables have the same name: \"{0}\")", duplicate.Key));
-        }
+        ValidateTables();
 
         XElement spreadsheet = new(Office + "spreadsheet");
 
@@ -91,6 +78,89 @@ public sealed class OpenDocumentSpreadsheet(string creatorName = "") : OpenDocum
             spreadsheet.Add(tableNode);
         }
         return spreadsheet;
+    }
+
+    private void ValidateTables()
+    {
+        // at least one table is required
+        if (Tables.Count == 0)
+        {
+            throw new InvalidOperationException("At least one table is required to generate a valid ods file");
+        }
+
+        // LibreOffice supports at most 10000 sheets.
+
+        // Check if any tables have the same name
+        if (Tables.Select(s => s.Name).Distinct().Count() != Tables.Count)
+        {
+            // Lets get a good error message
+            var duplicate = Tables.GroupBy(x => x.Name).Where(g => g.Count() > 1).First();
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Table Names must be distinct. (Two or more tables have the same name: \"{0}\")", duplicate.Key));
+        }
+    }
+
+    /// <inheritdoc />
+    internal override void WriteContent(XmlWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer, nameof(writer));
+
+        ValidateTables();
+
+        writer.WriteStartElement("office", "spreadsheet", Office.NamespaceName);
+
+        new OpenDocumentCalculationSettings()
+        {
+            CaseSensitive = OpenDocBoolean.False,
+            SearchCriteriaMustApplyToWholeCell = OpenDocBoolean.True,
+            UseWildcards = OpenDocBoolean.True,
+            UseRegularExpressions = OpenDocBoolean.False,
+            AutomaticFindLabels = OpenDocBoolean.False,
+        }.WriteTo(writer);
+
+        foreach (var t in Tables)
+        {
+            // The padding covers the whole table element, because that is where the columns are
+            // written, and it is undone again afterwards so that saving leaves the document
+            // alone - the same contract the element model path keeps.
+            using var padding = t.PadColumnsWhileSerializing();
+
+            // The table's own attributes and columns come from the shared walk; the rows are
+            // appended here, exactly as CreateContent appends them to the built element.
+            t.WriteTo(writer, null, w =>
+            {
+                foreach (var r in t.Rows)
+                {
+                    var rowNodeElem = new OpenDocumentTableRow()
+                    {
+                        StyleName = r.Style is null ? "ro1" : r.Style.Name,
+                    };
+                    rowNodeElem.WriteTo(w, null, rowWriter =>
+                    {
+                        foreach (var c in r.Cells)
+                        {
+                            c.WriteTo(rowWriter);
+                        }
+                        new OpenDocumentTableCell()
+                        {
+                            NumberColumnsRepeated = 16384 - r.Cells.Select(cell => cell.NumberColumnsRepeated).Sum(),
+                        }.WriteTo(rowWriter);
+                    });
+                }
+
+                var trailing = new OpenDocumentTableRow()
+                {
+                    NumberRowsRepeated = (1048576 - t.Rows.Count).ToString(CultureInfo.InvariantCulture),
+                    StyleName = "ro1",
+                };
+                trailing.TableCells.Add(new OpenDocumentTableCell()
+                {
+                    NumberColumnsRepeated = 16384,
+                });
+                trailing.WriteTo(w);
+            });
+        }
+
+        writer.WriteEndElement();
     }
 
     /// <summary>

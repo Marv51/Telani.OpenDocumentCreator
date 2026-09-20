@@ -1,4 +1,5 @@
-﻿using System.Xml.Linq;
+﻿using System.Xml;
+using System.Xml.Linq;
 
 namespace OpenDocumentCreator;
 
@@ -36,6 +37,31 @@ internal class OpenDocumentBody : OpenDocumentWritable
     /// </summary>
     [OpenDocumentName("content")]
     public XElement? Content { get; set; } = null;
+
+    /// <summary>
+    /// Writes the body's content directly, instead of it being handed over as a built
+    /// <see cref="Content"/> element. Set for the streaming save path; when null the body
+    /// serializes <see cref="Content"/> the usual way.
+    /// </summary>
+    internal Action<XmlWriter>? ContentWriter { get; set; }
+
+    /// <inheritdoc />
+    internal override void WriteTo(XmlWriter writer, Action<XmlWriter>? extraAttributes, Action<XmlWriter>? extraChildren)
+    {
+        if (ContentWriter is null)
+        {
+            base.WriteTo(writer, extraAttributes, extraChildren);
+            return;
+        }
+
+        ArgumentNullException.ThrowIfNull(writer, nameof(writer));
+
+        writer.WriteStartElement("office", OpenDocumentElementName, OpenDocument.Office.NamespaceName);
+        extraAttributes?.Invoke(writer);
+        ContentWriter(writer);
+        extraChildren?.Invoke(writer);
+        writer.WriteEndElement();
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OpenDocumentBody"/> class.
