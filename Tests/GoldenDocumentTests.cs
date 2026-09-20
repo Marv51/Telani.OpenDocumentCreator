@@ -154,18 +154,18 @@ public sealed class GoldenDocumentTests
         if (Environment.GetEnvironmentVariable("ODC_UPDATE_GOLDEN") == "1")
         {
             Directory.CreateDirectory(Path.GetDirectoryName(GoldenFile)!);
-            await File.WriteAllBytesAsync(GoldenFile, actual);
+            File.WriteAllBytes(GoldenFile, actual);
             Assert.Inconclusive("Reference regenerated at " + Path.GetFullPath(GoldenFile) + ". Read the diff before committing it.");
             return;
         }
 
         Assert.IsTrue(File.Exists(GoldenFile), "the reference file is missing: " + Path.GetFullPath(GoldenFile));
-        var expected = await File.ReadAllBytesAsync(GoldenFile);
+        var expected = File.ReadAllBytes(GoldenFile);
 
         if (!expected.AsSpan().SequenceEqual(actual))
         {
             var actualPath = Path.Combine(Path.GetTempPath(), "odc-actual-content.xml");
-            await File.WriteAllBytesAsync(actualPath, actual);
+            File.WriteAllBytes(actualPath, actual);
 
             Assert.AreEqual(
                 Encoding.UTF8.GetString(expected),
