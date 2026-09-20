@@ -71,6 +71,21 @@ So the generator covers, instead:
 - per cell `EmptyLineHandling` and `number-columns-repeated`
 - several **tables** per document, one table in eight large enough to move the column padding
 - **frames** carrying a text box or an image, not only a name
+- **styles with properties on them**, across all six property groups, with parent styles and data
+  style names; measurements in every unit and with several decimal places, colours including the
+  transparent one, and border lines on every edge and the diagonal
+- the families a spreadsheet uses rarely: `Table`, `Paragraph` and `Graphic`
+- spans set **on the cell** as `ColumnsSpanned`, `RowsSpanned` and `IsCovered`, not only through
+  `SetCellSpan`
+- every way of filling a `Row`: `Add` in each overload, `InsertCell` with and without a style,
+  `InsertCells`, `InsertCellsFromTemplateString`, and `Replace`
+
+The second half of that list came from reading a real caller of this library rather than from
+guessing. It writes its spans on the cell and hardly ever calls `SetCellSpan`, it fills rows
+through `InsertCell` far more than through `Add`, and above all it builds styles with real
+properties - borders, measurements in mixed units, colours, parent styles - where the corpus had
+been registering styles that carried nothing but a name and a family. None of the style
+serialization was being compared at all.
 
 Two things are deliberately left out. Values outside the range of a `float`, and the non finite
 ones, are places the two versions are *meant* to differ, since the released one stores cell values
@@ -94,6 +109,8 @@ run. Three that the corpus catches:
 | `text:s` count written as `n` instead of `n-1` | 158 |
 | `number-columns-repeated` written one too high | 372 |
 | `TrimEnds` empty line handling treated as `Preserve` | 167 |
+| border line written as style, width, colour instead of width, style, colour | 402 |
+| measurements formatted `0.##` instead of round trip | 416 |
 
-The last two are only reachable at all because the corpus sets those properties; before it did,
-both mutations passed unnoticed.
+Every one of those is reachable only because the corpus sets the property in question. Each of them
+passed unnoticed against an earlier version of this corpus.
