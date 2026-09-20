@@ -237,96 +237,99 @@ public class OpenDocumentCell
     {
         ArgumentNullException.ThrowIfNull(writer, nameof(writer));
 
+        var table = OpenDocument.Table.NamespaceName;
+
         if (IsCovered)
         {
-            new OpenDocumentCoveredTableCell().WriteTo(writer);
+            writer.WriteStartElement("table", "covered-table-cell", table);
+            writer.WriteEndElement();
             return;
         }
 
-        var cellNode = new OpenDocumentTableCell()
-        {
-            StyleName = Style is not null ? Style.Name : "ce1",
-        };
-        if (ColumnsSpanned != 1 || RowsSpanned != 1)
-        {
-            cellNode.NumberColumnsSpanned = ColumnsSpanned;
-            cellNode.NumberRowsSpanned = RowsSpanned;
-        }
+        var office = OpenDocument.Office.NamespaceName;
+
+        writer.WriteStartElement("table", "table-cell", table);
+
+        // Attribute order is the order the table-cell element declares them, because that is the
+        // order they came out in when this went through one.
         if (NumberColumnsRepeated != 1)
         {
-            cellNode.NumberColumnsRepeated = NumberColumnsRepeated;
+            writer.WriteAttributeString("table", "number-columns-repeated", table, NumberColumnsRepeated.ToString(CultureInfo.InvariantCulture));
         }
+        if (ColumnsSpanned != 1 || RowsSpanned != 1)
+        {
+            writer.WriteAttributeString("table", "number-columns-spanned", table, ColumnsSpanned.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("table", "number-rows-spanned", table, RowsSpanned.ToString(CultureInfo.InvariantCulture));
+        }
+        writer.WriteAttributeString("table", "style-name", table, Style is not null ? Style.Name : "ce1");
 
         if (Link is not null)
         {
-            cellNode.ValueType = "string";
-
             var realLink = Link.ToString();
             if (realLink.StartsWith("sheet://", StringComparison.InvariantCultureIgnoreCase))
             {
                 realLink = realLink[("sheet://".Length + 1)..];
             }
 
-            cellNode.WriteTo(writer, null, w =>
-            {
-                w.WriteStartElement("text", "p", Text.NamespaceName);
-                w.WriteStartElement("text", "a", Text.NamespaceName);
-                w.WriteAttributeString("xlink", "href", Xlink.NamespaceName, realLink);
-                w.WriteAttributeString("xlink", "type", Xlink.NamespaceName, "simple");
-                w.WriteString(string.IsNullOrEmpty(Content) ? realLink.TrimEnd('/') : Content);
-                w.WriteEndElement();
-                w.WriteEndElement();
-            });
+            writer.WriteAttributeString("office", "value-type", office, "string");
+
+            writer.WriteStartElement("text", "p", Text.NamespaceName);
+            writer.WriteStartElement("text", "a", Text.NamespaceName);
+            writer.WriteAttributeString("xlink", "href", Xlink.NamespaceName, realLink);
+            writer.WriteAttributeString("xlink", "type", Xlink.NamespaceName, "simple");
+            writer.WriteString(string.IsNullOrEmpty(Content) ? realLink.TrimEnd('/') : Content);
+            writer.WriteEndElement();
+            writer.WriteEndElement();
         }
         else if (!string.IsNullOrEmpty(Formula))
         {
             if (FloatContent.HasValue)
             {
-                cellNode.ValueType = "float";
-                cellNode.Formula = Formula;
-                cellNode.WriteTo(writer, WriteFloatValue, WriteFloatParagraph);
+                writer.WriteAttributeString("office", "value-type", office, "float");
+                writer.WriteAttributeString("table", "formula", table, Formula);
+                WriteFloatValue(writer);
+                WriteFloatParagraph(writer);
             }
             else if (!string.IsNullOrEmpty(Content))
             {
-                cellNode.ValueType = "string";
-                cellNode.Formula = Formula;
-                cellNode.WriteTo(writer, null, w => WriteParagraph(w, Content));
+                writer.WriteAttributeString("office", "value-type", office, "string");
+                writer.WriteAttributeString("table", "formula", table, Formula);
+                WriteParagraph(writer, Content);
             }
             else
             {
                 Debug.Fail("No value provided for the result of the formula");
-                cellNode.Formula = Formula;
-                cellNode.WriteTo(writer);
+                writer.WriteAttributeString("table", "formula", table, Formula);
             }
         }
         else if (!string.IsNullOrEmpty(Content))
         {
-            cellNode.ValueType = "string";
-            cellNode.WriteTo(writer, null, w =>
+            writer.WriteAttributeString("office", "value-type", office, "string");
+
+            if (Content.Contains('\n'))
             {
-                if (Content.Contains('\n'))
+                foreach (var line in SplitContentLines(Content))
                 {
-                    foreach (var line in SplitContentLines(Content))
-                    {
-                        WriteParagraph(w, line);
-                    }
+                    WriteParagraph(writer, line);
                 }
-                else
-                {
-                    WriteParagraph(w, Content);
-                }
-            });
+            }
+            else
+            {
+                WriteParagraph(writer, Content);
+            }
         }
         else if (FloatContent.HasValue)
         {
-            cellNode.ValueType = "float";
-            cellNode.WriteTo(writer, WriteFloatValue, WriteFloatParagraph);
+            writer.WriteAttributeString("office", "value-type", office, "float");
+            WriteFloatValue(writer);
+            WriteFloatParagraph(writer);
         }
-        else
+        else if (Frame is not null)
         {
-            cellNode.Frame = Frame;
-            cellNode.WriteTo(writer);
+            Frame.WriteTo(writer);
         }
+
+        writer.WriteEndElement();
     }
 
     // Through FormatCellValue, the same as the element model: the non finite values have their
