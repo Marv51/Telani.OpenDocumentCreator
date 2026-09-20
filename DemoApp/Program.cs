@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using OpenDocumentCreator;
+﻿using OpenDocumentCreator;
 using OpenDocumentCreator.DataTypes;
 using OpenDocumentCreator.Styles;
 
@@ -55,7 +54,7 @@ for (int i = 0; i < planets.Length; i++)
     var (name, distance, rings) = planets[i];
     var y = i + 1;
     grid.WriteCell(0, y, new OpenDocumentCell(name));
-    grid.WriteCell(1, y, new OpenDocumentCell { FloatContent = distance, Content = distance.ToString(CultureInfo.InvariantCulture) });
+    grid.WriteCell(1, y, new OpenDocumentCell { FloatContent = distance });
     grid.WriteCell(2, y, new OpenDocumentCell(rings ? "yes" : "no"));
 }
 
