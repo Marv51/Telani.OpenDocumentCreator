@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OdcCompat.Legacy</AssemblyName>
+    <RootNamespace>OdcCompat</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <NoWarn>$(NoWarn);CA1861</NoWarn>
+
+    <!-- The released assembly to compare against. Override to point at another version. -->
+    <LegacyAssembly Condition="'$(LegacyAssembly)' == ''">$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)'))telani.opendocumentcreator\1.0.4\lib\net10.0\OpenDocumentCreator.dll</LegacyAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- This project references only the released library. Keeping the two versions in separate
+         projects is what makes the comparison possible at all: both assemblies are called
+         OpenDocumentCreator, and MSBuild drops one of two references that share a simple name,
+         aliases or not. -->
+    <Reference Include="OpenDocumentCreator">
+      <HintPath>$(LegacyAssembly)</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\Recipe.cs" Link="Recipe.cs" />
+    <Compile Include="..\Shared\Build.cs" Link="Build.cs" />
+  </ItemGroup>
+
+</Project>
