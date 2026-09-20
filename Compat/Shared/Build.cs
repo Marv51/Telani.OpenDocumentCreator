@@ -41,11 +41,39 @@ internal static class Build
 
     private static byte[] Save(Recipe recipe)
     {
+        var doc = MakeDocument(recipe);
+
+        // 1.0.4 has no leaveOpen and closes the stream, so the bytes are taken from the closed
+        // stream. That works on both versions, so the same call serves for each. The font goes
+        // into the font face declarations, so it is worth varying.
+        var mem = new MemoryStream();
+        doc.Save(mem, false, recipe.DocumentFont).GetAwaiter().GetResult();
+        return mem.ToArray();
+    }
+
+    private static OpenDocument MakeDocument(Recipe recipe)
+    {
+        if (recipe.Kind == DocumentKind.Text)
+        {
+            // A text document writes its content a different way and holds no tables. The styles
+            // still go on, so the rest of the document is comparable as usual.
+            var text = new OpenDocumentText("Compat");
+            AddStyles(text, recipe.CellStyles);
+            AddStyles(text, recipe.ColumnStyles);
+            AddStyles(text, recipe.RowStyles);
+            AddStyles(text, recipe.TableStyles);
+            AddStyles(text, recipe.GraphicStyles);
+            AddStyles(text, recipe.ExtraStyles);
+            return text;
+        }
+
         var doc = new OpenDocumentSpreadsheet("Compat");
 
         var cellStyles = AddStyles(doc, recipe.CellStyles);
         var columnStyles = AddStyles(doc, recipe.ColumnStyles);
         var rowStyles = AddStyles(doc, recipe.RowStyles);
+        AddStyles(doc, recipe.TableStyles);
+        AddStyles(doc, recipe.GraphicStyles);
         AddStyles(doc, recipe.ExtraStyles);
 
         foreach (var table in recipe.Tables)
@@ -53,11 +81,7 @@ internal static class Build
             BuildTable(doc, table, cellStyles, columnStyles, rowStyles);
         }
 
-        // 1.0.4 has no leaveOpen and closes the stream, so the bytes are taken from the closed
-        // stream. That works on both versions, so the same call serves for each.
-        var mem = new MemoryStream();
-        doc.Save(mem, false, "Calibri").GetAwaiter().GetResult();
-        return mem.ToArray();
+        return doc;
     }
 
     private static void BuildTable(
@@ -69,6 +93,33 @@ internal static class Build
     {
         var ag = new AutoGrid(doc, doc.GetUniqueTableName(table.Name), table.Rows, table.Columns, table.DefaultWidth);
         doc.Tables.Add(ag);
+
+        if (table.StyleName is not null)
+        {
+            ag.StyleName = table.StyleName;
+        }
+
+        if (table.Shapes.Count > 0)
+        {
+            var shapes = new OpenDocumentShapes();
+            foreach (var shape in table.Shapes)
+            {
+                shapes.Frames.Add(Frame(shape));
+            }
+            ag.Shapes = shapes;
+        }
+
+        foreach (var column in table.ManualColumns)
+        {
+            // Put on the table directly rather than through AutoGrid, which never sets these.
+            Attempt(() => ag.AddColumn(new Column
+            {
+                StyleName = column.StyleName,
+                DefaultCellStyleName = column.DefaultCellStyleName ?? "ce1",
+                NumberColumnsRepeated = column.Repeat,
+                Visibility = Pick<Visibility>(column.Visibility) ?? Visibility.Visible,
+            }));
+        }
 
         if (table.ColumnWidths.Count > 0)
         {
@@ -117,7 +168,7 @@ internal static class Build
             CellKind.Number => new OpenDocumentCell(step.Number),
             CellKind.Formula => new OpenDocumentCell(step.Number) { Formula = Formula(step) },
             CellKind.Link => new OpenDocumentCell(Link(step)),
-            CellKind.Frame => new OpenDocumentCell { Frame = Frame(step) },
+            CellKind.Frame => new OpenDocumentCell { Frame = Frame(step.Frame) },
             _ => new OpenDocumentCell(),
         };
 
@@ -282,29 +333,43 @@ internal static class Build
         => "of:=SUM([.A" + ((step.X % 7) + 1) + ":.A" + ((step.Y % 9) + 2) + "])";
 
     private static Uri Link(CellStep step)
-        => (step.X % 3) switch
+        => ((step.X + step.Y) % 6) switch
         {
-            // The second and third carry characters the writer has to escape in an attribute.
+            // Several carry characters the writer has to escape in an attribute, and the last two
+            // are not http at all.
             0 => new Uri("https://example.invalid/" + step.X + "/" + step.Y),
             1 => new Uri("https://example.invalid/search?a=1&b=2&c=" + step.X),
-            _ => new Uri("https://example.invalid/path%20with%20spaces/" + step.Y + "#frag"),
+            2 => new Uri("https://example.invalid/path%20with%20spaces/" + step.Y + "#frag"),
+            3 => new Uri("https://example.invalid/\u00fcml\u00e4ute/" + step.Y),
+            4 => new Uri("mailto:nobody@example.invalid?subject=a%20b&cc=x"),
+            _ => new Uri("../relative/path/" + step.X + ".ods", UriKind.Relative),
         };
 
-    private static OpenDocumentFrame Frame(CellStep step)
+    private static OpenDocumentFrame Frame(FrameRecipe recipe)
     {
-        var frame = new OpenDocumentFrame { Name = "f" + step.X + "_" + step.Y };
+        var frame = new OpenDocumentFrame
+        {
+            Name = recipe.Name,
+            DrawingId = recipe.DrawingId,
+            StyleName = recipe.StyleName,
+            TextStyleName = recipe.TextStyleName,
+            X = Measure(recipe.X),
+            Y = Measure(recipe.Y),
+            Width = Measure(recipe.Width),
+            Height = Measure(recipe.Height),
+            ZIndex = recipe.ZIndex,
+        };
 
-        switch (step.Frame)
+        switch (recipe.Kind)
         {
             case FrameKind.Positioned:
-                frame.RelWidth = "50%";
-                frame.RelHeight = "25%";
-                frame.ZIndex = step.X;
+                frame.RelWidth = recipe.RelWidth;
+                frame.RelHeight = recipe.RelHeight;
                 break;
 
             case FrameKind.WithTextBox:
                 frame.TextBox = new OpenDocumentTextBox();
-                frame.TextBox.Paragraphs.Add(new OpenDocumentParagraph(step.Text));
+                frame.TextBox.Paragraphs.Add(new OpenDocumentParagraph(recipe.Text, recipe.ParagraphStyle));
                 frame.TextBox.Paragraphs.Add(new OpenDocumentParagraph("second  paragraph & more"));
                 break;
 
@@ -312,7 +377,7 @@ internal static class Build
                 // Href is the only part of an image the released version lets us set.
                 frame.Image = new OpenDocumentImage
                 {
-                    Href = "Pictures/" + step.X + "_" + step.Y + ".png",
+                    Href = "Pictures/" + recipe.Name + ".png",
                 };
                 break;
 
@@ -330,7 +395,7 @@ internal static class Build
     /// <param name="doc">the document</param>
     /// <param name="recipes">the styles to add</param>
     /// <returns>the styles</returns>
-    private static OpenDocumentStyle[] AddStyles(OpenDocumentSpreadsheet doc, IReadOnlyList<StyleRecipe> recipes)
+    private static OpenDocumentStyle[] AddStyles(OpenDocument doc, IReadOnlyList<StyleRecipe> recipes)
     {
         var styles = new OpenDocumentStyle[recipes.Count];
 

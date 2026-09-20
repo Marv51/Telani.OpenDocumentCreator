@@ -33,6 +33,16 @@ internal enum FrameKind
 }
 
 /// <summary>
+/// Which kind of document to write. The text document takes a different content writer, which
+/// nothing else here reaches.
+/// </summary>
+internal enum DocumentKind
+{
+    Spreadsheet,
+    Text,
+}
+
+/// <summary>
 /// Mirrors the library's EmptyLineHandling without naming it, so this file stays free of library
 /// types. <see cref="Unset"/> means leave the property alone.
 /// </summary>
@@ -167,10 +177,34 @@ internal sealed record CellStep(
     int StyleIndex,
     EmptyLineMode EmptyLines,
     int Repeat,
-    FrameKind Frame,
+    FrameRecipe Frame,
     int ColumnsSpanned,
     int RowsSpanned,
     bool IsCovered);
+
+/// <summary>
+/// A frame, whether it hangs off a cell or off the table's shapes.
+/// </summary>
+internal sealed record FrameRecipe(
+    FrameKind Kind,
+    string Name,
+    string? DrawingId,
+    string? StyleName,
+    string? TextStyleName,
+    string? ParagraphStyle,
+    MeasureRecipe? X,
+    MeasureRecipe? Y,
+    MeasureRecipe? Width,
+    MeasureRecipe? Height,
+    int? ZIndex,
+    string? RelWidth,
+    string? RelHeight,
+    string Text);
+
+/// <summary>
+/// A column added to the table by hand, rather than one AutoGrid made.
+/// </summary>
+internal sealed record ColumnRecipe(string? StyleName, string? DefaultCellStyleName, string Repeat, int? Visibility);
 
 internal sealed record SpanStep(int X, int Y, int RowSpan, int ColumnSpan);
 
@@ -185,6 +219,9 @@ internal sealed record BulkStep(BulkKind Kind, RowBuild Build, int X, int Y, IRe
 /// </summary>
 internal sealed record TableRecipe(
     string Name,
+    string? StyleName,
+    IReadOnlyList<FrameRecipe> Shapes,
+    IReadOnlyList<ColumnRecipe> ManualColumns,
     int Rows,
     int Columns,
     string DefaultWidth,
@@ -202,9 +239,13 @@ internal sealed record TableRecipe(
 /// </summary>
 internal sealed record Recipe(
     int Seed,
+    DocumentKind Kind,
+    string DocumentFont,
     IReadOnlyList<StyleRecipe> CellStyles,
     IReadOnlyList<StyleRecipe> ColumnStyles,
     IReadOnlyList<StyleRecipe> RowStyles,
+    IReadOnlyList<StyleRecipe> TableStyles,
+    IReadOnlyList<StyleRecipe> GraphicStyles,
     IReadOnlyList<StyleRecipe> ExtraStyles,
     IReadOnlyList<TableRecipe> Tables)
 {
@@ -243,6 +284,27 @@ internal sealed record Recipe(
     private static readonly decimal[] Measures =
         [0m, 0.001m, 0.74m, 1.5m, 9m, 14.5m, 20m, 32m, 40m, 72m, -3.25m, 1234.5678m];
 
+    /// <summary>
+    /// Table names the library does not take as given: the forbidden characters it rewrites, the
+    /// reserved name it replaces, the empty one it fills in, one at the length limit, and a name
+    /// repeated so that the unique name search has to do something.
+    /// </summary>
+    private static readonly string[] AwkwardNames =
+    [
+        "Plan [2026]",
+        "a/b\\c",
+        "why? *maybe*",
+        "time: 10:30",
+        "'quoted'",
+        "History",
+        "",
+        "exactly thirty one characters ok",
+        "Shared",
+        "Shared",
+        "Ümläute und ß",
+        "with  two  spaces",
+    ];
+
     private static readonly string[] DataStyles = ["N0", "N2", "N109"];
 
     private static readonly string[] Angles = ["0", "90", "270"];
@@ -274,32 +336,33 @@ internal sealed record Recipe(
         var cellStyles = Styles(random, StyleTarget.TableCell, "ce", random.Next(0, 5));
         var columnStyles = Styles(random, StyleTarget.TableColumn, "co", random.Next(0, 4));
         var rowStyles = Styles(random, StyleTarget.TableRow, "ro", random.Next(1, 4));
+        var tableStyles = Styles(random, StyleTarget.Table, "ta", random.Next(1, 3));
+        var graphicStyles = Styles(random, StyleTarget.Graphic, "gr", random.Next(0, 3));
 
-        // The families a spreadsheet uses more rarely. No cell refers to them; they are here
-        // because a style still has to serialize, and each family writes a different properties
-        // element.
-        var extra = new List<StyleRecipe>();
-        if (random.Next(0, 2) == 0)
-        {
-            extra.AddRange(Styles(random, StyleTarget.Table, "ta", 1));
-        }
-        if (random.Next(0, 2) == 0)
-        {
-            extra.AddRange(Styles(random, StyleTarget.Paragraph, "P", 1));
-        }
-        if (random.Next(0, 2) == 0)
-        {
-            extra.AddRange(Styles(random, StyleTarget.Graphic, "gr", 1));
-        }
+        var extra = random.Next(0, 2) == 0 ? Styles(random, StyleTarget.Paragraph, "P", 1) : [];
 
         var tables = new List<TableRecipe>();
         var tableCount = random.Next(1, 4);
         for (var i = 0; i < tableCount; i++)
         {
-            tables.Add(GenerateTable(random, i, cellStyles.Count, columnStyles.Count));
+            tables.Add(GenerateTable(random, i, cellStyles.Count, columnStyles.Count, tableStyles.Count, graphicStyles.Count));
         }
 
-        return new Recipe(seed, cellStyles, columnStyles, rowStyles, extra, tables);
+        // A text document now and then. It has a content writer of its own, which nothing else
+        // in the corpus reaches, and it ignores the tables.
+        var kind = random.Next(0, 12) == 0 ? DocumentKind.Text : DocumentKind.Spreadsheet;
+
+        return new Recipe(
+            seed,
+            kind,
+            Fonts[random.Next(Fonts.Length)],
+            cellStyles,
+            columnStyles,
+            rowStyles,
+            tableStyles,
+            graphicStyles,
+            extra,
+            tables);
     }
 
     /// <summary>
@@ -427,7 +490,13 @@ internal sealed record Recipe(
     private static string? MaybeOne(Random random, string[] pool)
         => random.Next(0, 3) == 0 ? null : pool[random.Next(pool.Length)];
 
-    private static TableRecipe GenerateTable(Random random, int index, int cellStyleCount, int columnStyleCount)
+    private static TableRecipe GenerateTable(
+        Random random,
+        int index,
+        int cellStyleCount,
+        int columnStyleCount,
+        int tableStyleCount,
+        int graphicStyleCount)
     {
         // Most tables stay small so that a run of a few thousand documents is quick. One in eight
         // is big enough to push the column padding and the repeat counts around.
@@ -453,14 +522,35 @@ internal sealed record Recipe(
             columnStyles.Add(random.Next(0, columnStyleCount));
         }
 
+        // Columns put on the table directly rather than through AutoGrid, carrying the parts of a
+        // column that AutoGrid never sets.
+        var manual = new List<ColumnRecipe>();
+        for (var i = 0; i < random.Next(0, 3); i++)
+        {
+            manual.Add(new ColumnRecipe(
+                columnStyleCount == 0 || random.Next(0, 2) == 0 ? null : "co_" + random.Next(0, columnStyleCount),
+                cellStyleCount == 0 || random.Next(0, 2) == 0 ? null : "ce_" + random.Next(0, cellStyleCount),
+                random.Next(0, 4) == 0 ? random.Next(2, 9).ToString(CultureInfo.InvariantCulture) : "1",
+                random.Next(0, 2) == 0 ? null : random.Next(0, 6)));
+        }
+
+        var shapes = new List<FrameRecipe>();
+        for (var i = 0; i < random.Next(0, 3); i++)
+        {
+            shapes.Add(GenerateFrame(random, "sh" + index + "_" + i, graphicStyleCount));
+        }
+
         var cellCap = large ? 800 : 300;
         var cells = new List<CellStep>();
         for (var i = 0; i < random.Next(0, Math.Min(rows * columns, cellCap) + 1); i++)
         {
             var kind = (CellKind)random.Next(Enum.GetValues<CellKind>().Length);
+            var x = random.Next(0, columns);
+            var y = random.Next(0, rows);
+
             cells.Add(new CellStep(
-                random.Next(0, columns),
-                random.Next(0, rows),
+                x,
+                y,
                 kind,
                 Texts[random.Next(Texts.Length)],
                 Number(random),
@@ -468,7 +558,7 @@ internal sealed record Recipe(
                 (EmptyLineMode)random.Next(Enum.GetValues<EmptyLineMode>().Length),
                 // A repeat of 1 is the ordinary case; the rest exercise number-columns-repeated.
                 random.Next(0, 6) == 0 ? random.Next(1, 5) : 1,
-                (FrameKind)random.Next(Enum.GetValues<FrameKind>().Length),
+                GenerateFrame(random, "f" + x + "_" + y, graphicStyleCount),
                 // The real callers mostly span by setting these on the cell rather than by
                 // calling SetCellSpan, so both routes are worth having.
                 random.Next(0, 8) == 0 ? random.Next(1, 4) : 1,
@@ -497,7 +587,10 @@ internal sealed record Recipe(
         }
 
         return new TableRecipe(
-            "Sheet" + index + "_" + random.Next(0, 100),
+            TableName(random, index),
+            tableStyleCount == 0 || random.Next(0, 3) == 0 ? null : "ta_" + random.Next(0, tableStyleCount),
+            shapes,
+            manual,
             rows,
             columns,
             Widths[random.Next(Widths.Length)],
@@ -510,6 +603,35 @@ internal sealed record Recipe(
             styledRows,
             bulk);
     }
+
+    /// <summary>
+    /// A table name. Most are ordinary, but the pool also holds names the library has to escape or
+    /// replace, and a name shared between tables so that the unique name search has to run.
+    /// </summary>
+    /// <param name="random">the source of randomness</param>
+    /// <param name="index">which table in the document this is</param>
+    /// <returns>the name</returns>
+    private static string TableName(Random random, int index)
+        => random.Next(0, 3) == 0
+            ? AwkwardNames[random.Next(AwkwardNames.Length)]
+            : "Sheet" + index + "_" + random.Next(0, 100);
+
+    private static FrameRecipe GenerateFrame(Random random, string name, int graphicStyleCount)
+        => new(
+            (FrameKind)random.Next(Enum.GetValues<FrameKind>().Length),
+            name,
+            random.Next(0, 3) == 0 ? null : "id_" + random.Next(0, 50),
+            graphicStyleCount == 0 || random.Next(0, 2) == 0 ? null : "gr_" + random.Next(0, graphicStyleCount),
+            random.Next(0, 3) == 0 ? null : "T1",
+            random.Next(0, 3) == 0 ? null : "P_0",
+            MaybeMeasure(random),
+            MaybeMeasure(random),
+            MaybeMeasure(random),
+            MaybeMeasure(random),
+            random.Next(0, 3) == 0 ? null : random.Next(0, 5),
+            MaybeOne(random, Opacities),
+            MaybeOne(random, Opacities),
+            Texts[random.Next(Texts.Length)]);
 
     private static BulkStep GenerateBulk(Random random, int rows, int columns, int cellStyleCount)
     {
