@@ -1,4 +1,6 @@
-﻿using System.Xml.Linq;
+﻿using System.Globalization;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace OpenDocumentCreator;
 
@@ -173,5 +175,54 @@ internal class OpenDocumentTableCell : OpenDocumentWritable
             elem.Add(Frame.GetElement());
         }
         return elem;
+    }
+
+    /// <inheritdoc />
+    internal override void WriteTo(XmlWriter writer, Action<XmlWriter>? extraAttributes, Action<XmlWriter>? extraChildren)
+    {
+        ArgumentNullException.ThrowIfNull(writer, nameof(writer));
+
+        var table = OpenDocument.Table.NamespaceName;
+        var office = OpenDocument.Office.NamespaceName;
+
+        writer.WriteStartElement("table", OpenDocumentElementName, table);
+
+        if (NumberColumnsRepeated is not null)
+        {
+            writer.WriteAttributeString("table", "number-columns-repeated", table, NumberColumnsRepeated.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        if (NumberColumnsSpanned is not null)
+        {
+            writer.WriteAttributeString("table", "number-columns-spanned", table, NumberColumnsSpanned.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        if (NumberRowsSpanned is not null)
+        {
+            writer.WriteAttributeString("table", "number-rows-spanned", table, NumberRowsSpanned.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        if (StyleName is not null)
+        {
+            writer.WriteAttributeString("table", "style-name", table, StyleName);
+        }
+        if (ValueType is not null)
+        {
+            writer.WriteAttributeString("office", "value-type", office, ValueType);
+        }
+        if (Formula is not null)
+        {
+            writer.WriteAttributeString("table", "formula", table, Formula);
+        }
+        if (Value is not null)
+        {
+            writer.WriteAttributeString("office", "value", office, XmlConvert.ToString(Value.Value));
+        }
+        extraAttributes?.Invoke(writer);
+
+        if (Frame is not null)
+        {
+            Frame.WriteTo(writer);
+        }
+        extraChildren?.Invoke(writer);
+
+        writer.WriteEndElement();
     }
 }

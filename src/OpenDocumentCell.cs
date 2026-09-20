@@ -223,6 +223,151 @@ public class OpenDocumentCell
         return value.ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// Writes this cell straight to <paramref name="writer"/>.
+    /// </summary>
+    /// <param name="writer">the writer to write to</param>
+    /// <remarks>
+    /// The streaming counterpart of <see cref="CreateElement"/>, and deliberately the same shape:
+    /// the small table-cell object is still built, because it carries the attribute mapping, but
+    /// no XElement tree is. There are a great many of these per document, and the tree was most of
+    /// what an export allocated.
+    /// </remarks>
+    internal void WriteTo(XmlWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer, nameof(writer));
+
+        if (IsCovered)
+        {
+            new OpenDocumentCoveredTableCell().WriteTo(writer);
+            return;
+        }
+
+        var cellNode = new OpenDocumentTableCell()
+        {
+            StyleName = Style is not null ? Style.Name : "ce1",
+        };
+        if (ColumnsSpanned != 1 || RowsSpanned != 1)
+        {
+            cellNode.NumberColumnsSpanned = ColumnsSpanned;
+            cellNode.NumberRowsSpanned = RowsSpanned;
+        }
+        if (NumberColumnsRepeated != 1)
+        {
+            cellNode.NumberColumnsRepeated = NumberColumnsRepeated;
+        }
+
+        if (Link is not null)
+        {
+            cellNode.ValueType = "string";
+
+            var realLink = Link.ToString();
+            if (realLink.StartsWith("sheet://", StringComparison.InvariantCultureIgnoreCase))
+            {
+                realLink = realLink[("sheet://".Length + 1)..];
+            }
+
+            cellNode.WriteTo(writer, null, w =>
+            {
+                w.WriteStartElement("text", "p", Text.NamespaceName);
+                w.WriteStartElement("text", "a", Text.NamespaceName);
+                w.WriteAttributeString("xlink", "href", Xlink.NamespaceName, realLink);
+                w.WriteAttributeString("xlink", "type", Xlink.NamespaceName, "simple");
+                w.WriteString(string.IsNullOrEmpty(Content) ? realLink.TrimEnd('/') : Content);
+                w.WriteEndElement();
+                w.WriteEndElement();
+            });
+        }
+        else if (!string.IsNullOrEmpty(Formula))
+        {
+            if (FloatContent.HasValue)
+            {
+                cellNode.ValueType = "float";
+                cellNode.Formula = Formula;
+                cellNode.WriteTo(writer, WriteFloatValue, WriteFloatParagraph);
+            }
+            else if (!string.IsNullOrEmpty(Content))
+            {
+                cellNode.ValueType = "string";
+                cellNode.Formula = Formula;
+                cellNode.WriteTo(writer, null, w => WriteParagraph(w, Content));
+            }
+            else
+            {
+                Debug.Fail("No value provided for the result of the formula");
+                cellNode.Formula = Formula;
+                cellNode.WriteTo(writer);
+            }
+        }
+        else if (!string.IsNullOrEmpty(Content))
+        {
+            cellNode.ValueType = "string";
+            cellNode.WriteTo(writer, null, w =>
+            {
+                if (Content.Contains('\n'))
+                {
+                    foreach (var line in SplitContentLines(Content))
+                    {
+                        WriteParagraph(w, line);
+                    }
+                }
+                else
+                {
+                    WriteParagraph(w, Content);
+                }
+            });
+        }
+        else if (FloatContent.HasValue)
+        {
+            cellNode.ValueType = "float";
+            cellNode.WriteTo(writer, WriteFloatValue, WriteFloatParagraph);
+        }
+        else
+        {
+            cellNode.Frame = Frame;
+            cellNode.WriteTo(writer);
+        }
+    }
+
+    // Through FormatCellValue, the same as the element model: the non finite values have their
+    // own spelling in xs:double, and the two paths have to agree on it.
+    private void WriteFloatValue(XmlWriter writer)
+        => writer.WriteAttributeString("office", "value", Office.NamespaceName, FormatCellValue(FloatContent!.Value));
+
+    private void WriteFloatParagraph(XmlWriter writer)
+    {
+        writer.WriteStartElement("text", "p", Text.NamespaceName);
+        writer.WriteString(FloatContent!.Value.ToString(CultureInfo.CurrentCulture));
+        writer.WriteEndElement();
+    }
+
+    /// <summary>
+    /// Writes one text:p, encoding runs of spaces as text:s exactly as the element model does.
+    /// </summary>
+    private static void WriteParagraph(XmlWriter writer, string content)
+    {
+        writer.WriteStartElement("text", "p", Text.NamespaceName);
+        foreach (var node in EncodeTextContent(content))
+        {
+            if (node is XElement spaceRun)
+            {
+                writer.WriteStartElement("text", spaceRun.Name.LocalName, Text.NamespaceName);
+                foreach (var attribute in spaceRun.Attributes())
+                {
+                    writer.WriteAttributeString("text", attribute.Name.LocalName, Text.NamespaceName, attribute.Value);
+                }
+                writer.WriteEndElement();
+            }
+            else if (node is XText text)
+            {
+                // Value, not ToString: ToString serializes the node through a writer of its own,
+                // which both escapes the text a second time and allocates a writer per text node.
+                writer.WriteString(text.Value);
+            }
+        }
+        writer.WriteEndElement();
+    }
+
     internal XElement CreateElement()
     {
         if (IsCovered)

@@ -1,4 +1,5 @@
-﻿using System.Xml.Linq;
+﻿using System.Xml;
+using System.Xml.Linq;
 
 namespace OpenDocumentCreator;
 
@@ -82,5 +83,31 @@ internal sealed class OpenDocumentTableRow : OpenDocumentWritable
             elem.Add(item.GetElement());
         }
         return elem;
+    }
+
+    /// <inheritdoc />
+    internal override void WriteTo(XmlWriter writer, Action<XmlWriter>? extraAttributes, Action<XmlWriter>? extraChildren)
+    {
+        ArgumentNullException.ThrowIfNull(writer, nameof(writer));
+
+        writer.WriteStartElement("table", OpenDocumentElementName, OpenDocument.Table.NamespaceName);
+
+        if (NumberRowsRepeated is not null)
+        {
+            writer.WriteAttributeString("table", "number-rows-repeated", OpenDocument.Table.NamespaceName, NumberRowsRepeated);
+        }
+        if (StyleName is not null)
+        {
+            writer.WriteAttributeString("table", "style-name", OpenDocument.Table.NamespaceName, StyleName);
+        }
+        extraAttributes?.Invoke(writer);
+
+        foreach (var item in TableCells)
+        {
+            item.WriteTo(writer);
+        }
+        extraChildren?.Invoke(writer);
+
+        writer.WriteEndElement();
     }
 }
