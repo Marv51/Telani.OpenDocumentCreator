@@ -154,7 +154,6 @@ public class OpenDocumentCell
         return lines;
     }
 
-
     /// <summary>
     /// Formats a value for the office:value attribute.
     ///

@@ -247,6 +247,7 @@ public abstract class OpenDocumentWritable
 
     private static OpenDocumentNameAttribute RequireName(SerializationHelper prop)
         => prop.OpenDocumentNameAttribute ?? throw new InvalidOperationException("OpenDocumentNameAttribute missing");
+
     /// <summary>
     /// Get element as XML element
     /// </summary>

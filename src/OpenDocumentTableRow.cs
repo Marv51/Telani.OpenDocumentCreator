@@ -65,7 +65,6 @@ internal sealed class OpenDocumentTableRow : OpenDocumentWritable
     [OpenDocumentName]
     public List<OpenDocumentTableCell> TableCells { get; private set; } = [];
 
-
     /// <inheritdoc />
     internal override void WriteTo(XmlWriter writer, Action<XmlWriter>? extraAttributes, Action<XmlWriter>? extraChildren)
     {

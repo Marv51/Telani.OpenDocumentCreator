@@ -9,7 +9,6 @@ internal sealed class OpenDocumentCoveredTableCell : OpenDocumentWritable
 
     internal override string? NamespaceName => "table";
 
-
     /// <inheritdoc />
     internal override void WriteTo(XmlWriter writer, Action<XmlWriter>? extraAttributes, Action<XmlWriter>? extraChildren)
     {
