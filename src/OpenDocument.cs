@@ -570,7 +570,11 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     {
         var newEntry = zip.CreateEntry(path, compression);
         using var archiveStream = newEntry.Open();
-        content.Save(archiveStream);
+
+        // Indentation is the default for XDocument.Save, and it is pure overhead here: the
+        // indenting whitespace sits between elements in element-only content, which ODF readers
+        // ignore. Writing it made content.xml about a quarter larger.
+        content.Save(archiveStream, SaveOptions.DisableFormatting);
         archiveStream.Flush();
     }
 
