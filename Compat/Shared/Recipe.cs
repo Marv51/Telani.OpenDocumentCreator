@@ -58,6 +58,23 @@ internal enum EmptyLineMode
 /// One of the bulk writers. They take a different path through AutoGrid than WriteCell does, and
 /// WriteRows in particular is enumerated rather than indexed.
 /// </summary>
+/// <summary>
+/// How a cell write reaches the grid. A prebuilt cell replaces whatever was there; everything else
+/// goes through the generic overload's type switch, which mutates the cell already in place. The
+/// types are the ones that switch names - an int, oddly, sets the repeat count rather than a value.
+/// </summary>
+internal enum WriteAs
+{
+    Cell,
+    Text,
+    Number,
+    SingleNumber,
+    Link,
+    Frame,
+    RepeatCount,
+    Unsupported,
+}
+
 internal enum BulkKind
 {
     WriteColumn,
@@ -81,6 +98,8 @@ internal enum RowBuild
     InsertCells,
     TemplateString,
     AddThenReplace,
+    AddThenRemove,
+    AddThenClear,
 }
 
 /// <summary>
@@ -388,7 +407,8 @@ internal sealed record CellStep(
     int ColumnsSpanned,
     int RowsSpanned,
     bool IsCovered,
-    int Extras);
+    int Extras,
+    WriteAs Write);
 
 /// <summary>
 /// A frame, whether it hangs off a cell or off the table's shapes.
@@ -456,10 +476,17 @@ internal sealed record TableRecipe(
 /// <summary>
 /// A whole document, described without using either library.
 /// </summary>
+/// <summary>
+/// A binary resource added to the document. The library dedupes them by content, so equal bytes
+/// are deliberately likely.
+/// </summary>
+internal sealed record ImageResource(string FileName, int Content, int Length);
+
 internal sealed record Recipe(
     int Seed,
     DocumentKind Kind,
     string DocumentFont,
+    IReadOnlyList<ImageResource> Images,
     bool UnregisteredStyle,
     IReadOnlyList<StyleRecipe> CellStyles,
     IReadOnlyList<StyleRecipe> ColumnStyles,
@@ -569,6 +596,21 @@ internal sealed record Recipe(
 
     private static readonly string[] Mirrors = ["none", "horizontal", "vertical"];
 
+    /// <summary>
+    /// File names for image resources. The library takes the extension by splitting on a dot and
+    /// using the last part, so the ones without a dot and the one ending in a dot are the
+    /// interesting entries.
+    /// </summary>
+    private static readonly string[] ImageNames =
+    [
+        "logo.png",
+        "chart.jpeg",
+        "a.b.c.gif",
+        "no-extension",
+        "trailing.",
+        "Ümläute.png",
+    ];
+
     private static readonly string[] Clips = ["auto", "rect(0cm, 0cm, 0cm, 0cm)"];
 
     private static readonly string[] Aligns = ["left", "center", "right", "justify"];
@@ -622,10 +664,20 @@ internal sealed record Recipe(
         // in the corpus reaches, and it ignores the tables.
         var kind = random.Next(0, 12) == 0 ? DocumentKind.Text : DocumentKind.Spreadsheet;
 
+        var images = new List<ImageResource>();
+        for (var i = 0; i < random.Next(0, 4); i++)
+        {
+            images.Add(new ImageResource(
+                ImageNames[random.Next(ImageNames.Length)],
+                random.Next(0, 3),
+                random.Next(0, 4) == 0 ? 0 : random.Next(1, 200)));
+        }
+
         return new Recipe(
             seed,
             kind,
             random.Next(0, 10) == 0 ? string.Empty : Fonts[random.Next(Fonts.Length)],
+            images,
             random.Next(0, 8) == 0,
             cellStyles,
             columnStyles,
@@ -925,7 +977,11 @@ internal sealed record Recipe(
                 random.Next(0, 8) == 0 ? random.Next(1, 4) : 1,
                 random.Next(0, 10) == 0 ? random.Next(1, 3) : 1,
                 random.Next(0, 12) == 0,
-                random.Next(0, 4) == 0 ? random.Next(1, 16) : 0));
+                random.Next(0, 4) == 0 ? random.Next(1, 16) : 0,
+                // Mostly a prebuilt cell, as a caller would; the rest walk the type switch.
+                random.Next(0, 4) == 0
+                    ? (WriteAs)random.Next(Enum.GetValues<WriteAs>().Length)
+                    : WriteAs.Cell));
         }
 
         var spans = new List<SpanStep>();

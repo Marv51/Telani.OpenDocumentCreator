@@ -100,6 +100,16 @@ So the generator covers, instead:
   `OpenDocumentImage` that have no public setter in either version
 - documents with **no tables at all**, which the library fills in on the way out, and a cell naming
   a style the document was never given
+- **binary resources**, through `AddImageResource`, which are the only entries in the package that
+  are not XML and the only manifest lines not written for a fixed part; the content is drawn from a
+  small set because the library dedupes by bytes, and the file names cover what its extension split
+  does with a name that has no dot, several dots, or ends in one
+- **every way a value reaches a cell**: a prebuilt cell replaces what was there, while the generic
+  overload's type switch mutates the cell in place, and it names types the corpus never passed - an
+  `int`, which sets the repeat count rather than a value, a `float`, and a default branch for
+  anything it does not name
+- `Row.Remove` and `Row.Clear`, and `TotalNumberOfColumns` asked in the middle of building, where
+  its cached answer has to be dropped by the writes around it
 
 The second half of that list came from reading a real caller of this library rather than from
 guessing. It writes its spans on the cell and hardly ever calls `SetCellSpan`, it fills rows
@@ -129,8 +139,10 @@ One number is worth watching: how many distinct attribute names the corpus makes
 It is 156. If a property is added to the library and nothing here sets it, that figure does not
 move, and no number of extra documents will notice the gap - only widening the generator will.
 
-The generator is now close to the end of what it can reach. Every property a caller can set is
-set. What is left out cannot be reached from any public API:
+The generator is now at the end of what it can reach. Every property a caller can set is set, and
+every public method on the types it builds documents from is called except four that cannot change
+the bytes: `GetStyleByName`, `EscapeTableName`, `Row.Contains` and `Row.CopyTo`. What is left out
+cannot be reached from any public API:
 
 - `OpenDocumentImage.Type`, `Show` and `Actuate` have no public setter in either version
 - `style:page-layout` and its children - `page-layout-properties`, `header-style`, `footer-style`,
@@ -159,6 +171,8 @@ run. Those the corpus catches:
 | `style:master-page-name` written as `style:master-page` | 444 |
 | `style:border-line-width-left` renamed | 344 |
 | the filled in default table named `Sheet1` rather than `Tabelle 1` | 20 |
+| image resources written to `media/img*` rather than `media/image*` | 371 |
+| an `int` passed to `WriteCell` setting the row span rather than the repeat count | 32 |
 
 Every one of those is reachable only because the corpus sets the property in question. Each of them
 passed unnoticed against an earlier version of this corpus.

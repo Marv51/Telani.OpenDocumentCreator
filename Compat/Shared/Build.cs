@@ -64,6 +64,7 @@ internal static class Build
             AddStyles(text, recipe.TableStyles);
             AddStyles(text, recipe.GraphicStyles);
             AddStyles(text, recipe.ExtraStyles);
+            AddImages(text, recipe.Images);
             return text;
         }
 
@@ -83,6 +84,8 @@ internal static class Build
         AddStyles(doc, recipe.TableStyles);
         AddStyles(doc, recipe.GraphicStyles);
         AddStyles(doc, recipe.ExtraStyles);
+
+        AddImages(doc, recipe.Images);
 
         foreach (var table in recipe.Tables)
         {
@@ -155,6 +158,11 @@ internal static class Build
         {
             WriteCell(ag, step, cellStyles);
         }
+
+        // Asked for in the middle of building, between the writes that change it. The answer is
+        // cached and the cache is meant to be dropped when a column is added, so where it is asked
+        // matters.
+        Attempt(() => _ = ag.TotalNumberOfColumns());
 
         foreach (var bulk in table.BulkWrites)
         {
@@ -245,7 +253,53 @@ internal static class Build
             cell.IsCovered = true;
         }
 
-        Attempt(() => ag.WriteCell(step.X, step.Y, cell, style));
+        // A prebuilt cell replaces what was there. Everything else goes through the generic
+        // overload, whose type switch mutates the cell already in place instead, so the two
+        // reach a different place even when the value is the same.
+        switch (step.Write)
+        {
+            case WriteAs.Text:
+                Attempt(() => ag.WriteCell(step.X, step.Y, step.Text, style));
+                break;
+
+            case WriteAs.Number:
+                Attempt(() => ag.WriteCell(step.X, step.Y, step.Number, style));
+                break;
+
+            case WriteAs.SingleNumber:
+                Attempt(() => ag.WriteCell(step.X, step.Y, (float)step.Number, style));
+                break;
+
+            case WriteAs.Link:
+                Attempt(() => ag.WriteCell(step.X, step.Y, Link(step), style));
+                break;
+
+            case WriteAs.Frame:
+                Attempt(() => ag.WriteCell(step.X, step.Y, Frame(step.Frame), style));
+                break;
+
+            case WriteAs.RepeatCount:
+                // An int sets the repeat count rather than a value, which is worth pinning down.
+                Attempt(() => ag.WriteCell(step.X, step.Y, step.Repeat, style));
+                break;
+
+            case WriteAs.Unsupported:
+                // A type the switch does not name falls to its default branch.
+                Attempt(() => ag.WriteCell(step.X, step.Y, (long)step.Repeat, style));
+                break;
+
+            default:
+                // The overload that takes the coordinates last, for the cells that use a style.
+                if (style is not null && step.Repeat == 1)
+                {
+                    Attempt(() => ag.WriteCell(cell, style, step.X, step.Y));
+                }
+                else
+                {
+                    Attempt(() => ag.WriteCell(step.X, step.Y, cell, style));
+                }
+                break;
+        }
     }
 
     private static void WriteBulk(AutoGrid ag, BulkStep bulk, OpenDocumentStyle[] cellStyles)
@@ -341,6 +395,26 @@ internal static class Build
                 row.InsertCellsFromTemplateString(style, Template(values.Count), [.. values]);
                 break;
 
+            case RowBuild.AddThenRemove:
+                foreach (var value in values)
+                {
+                    row.Add(new OpenDocumentCell(value));
+                }
+                if (row.Count > 0)
+                {
+                    row.Remove(row.First());
+                }
+                break;
+
+            case RowBuild.AddThenClear:
+                foreach (var value in values)
+                {
+                    row.Add(new OpenDocumentCell(value));
+                }
+                row.Clear();
+                row.Add(new OpenDocumentCell("after  clear"));
+                break;
+
             case RowBuild.AddThenReplace:
                 foreach (var value in values)
                 {
@@ -431,6 +505,28 @@ internal static class Build
         return frame;
     }
 
+
+
+    /// <summary>
+    /// Adds the binary resources. Each becomes an entry in the package and a line in the manifest,
+    /// neither of which anything else here produces. The library dedupes them by content, so the
+    /// recipe draws the content from a small set on purpose.
+    /// </summary>
+    /// <param name="doc">the document</param>
+    /// <param name="images">the resources to add</param>
+    private static void AddImages(OpenDocument doc, IReadOnlyList<ImageResource> images)
+    {
+        foreach (var image in images)
+        {
+            var bytes = new byte[image.Length];
+            for (var i = 0; i < bytes.Length; i++)
+            {
+                bytes[i] = (byte)((i * 31) + image.Content);
+            }
+
+            Attempt(() => doc.AddImageResource(bytes, image.FileName));
+        }
+    }
 
     /// <summary>
     /// Registers a run of styles on the document and returns them in recipe order.
