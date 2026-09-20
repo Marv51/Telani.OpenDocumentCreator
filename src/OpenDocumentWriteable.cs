@@ -247,69 +247,59 @@ public abstract class OpenDocumentWritable
 
     private static OpenDocumentNameAttribute RequireName(SerializationHelper prop)
         => prop.OpenDocumentNameAttribute ?? throw new InvalidOperationException("OpenDocumentNameAttribute missing");
-
     /// <summary>
     /// Get element as XML element
     /// </summary>
     /// <returns>Xml Element for this class</returns>
     /// <exception cref="System.InvalidOperationException">If an attribute is missing.</exception>
     /// <remarks>
-    /// This is implementation can be overridden in sub-classes, to provide a faster implementation for specific classes.
+    /// Built by running <see cref="WriteTo(XmlWriter)"/> into a writer that appends to an XLinq
+    /// tree, so there is one description of how an element serializes rather than two that have to
+    /// be kept in step. They did drift: the streaming path once spelled the non finite numbers
+    /// differently from this one.
     ///
-    /// This default implementation uses reflection to get all properties with OpenDocumentName attributes.
+    /// Saving no longer goes through here - it writes straight to the file - so this is for
+    /// callers that want the tree: the unzipped debug output, and tests.
     /// </remarks>
-    internal virtual XElement GetElement()
+    internal XElement GetElement()
     {
-        var element_namespace = NamespaceName is null ? OpenDocument.Style : OpenDocument.FindNamespace(NamespaceName);
-
-        var elem = new XElement(element_namespace + OpenDocumentElementName);
-        foreach (var item in NamespaceDefinitions)
+        var document = new XDocument();
+        using (var writer = document.CreateWriter())
         {
-            elem.Add(item);
+            WriteTo(writer);
         }
-        foreach (var prop in GetSerializers())
-        {
-            object? value = prop.Getter(this);
 
-            switch (value)
+        var root = document.Root ?? throw new InvalidOperationException("Serializing " + OpenDocumentElementName + " produced no element");
+        RemoveRedundantNamespaceDeclarations(root);
+        return root;
+    }
+
+    /// <summary>
+    /// Drops namespace declarations that an ancestor already makes.
+    /// </summary>
+    /// <param name="root">the element to clean up, together with everything under it</param>
+    /// <remarks>
+    /// A writer has to declare a prefix before using it and cannot know that an element will later
+    /// be nested inside one that already declares it, so writing into a tree leaves a declaration
+    /// on every element. Serializing that produces the same XML with a great deal of noise in it.
+    /// The ones an ancestor already makes are therefore removed; the outermost declaration of each
+    /// prefix stays, which is what the element model produced before.
+    /// </remarks>
+    private static void RemoveRedundantNamespaceDeclarations(XElement root)
+    {
+        foreach (var element in root.Descendants().ToList())
+        {
+            foreach (var declaration in element.Attributes().Where(a => a.IsNamespaceDeclaration).ToList())
             {
-                case Enum valueEnum:
-                    var enumStrValue = EnumToStringGenerator.EnumToString(valueEnum);
-                    AddAttribute(elem, prop.OpenDocumentNameAttribute ?? throw new InvalidOperationException("OpenDocumentNameAttribute missing"), enumStrValue);
-                    break;
-                case string valueString:
-                    AddAttribute(elem, prop.OpenDocumentNameAttribute ?? throw new InvalidOperationException("OpenDocumentNameAttribute missing"), valueString);
-                    break;
-                case int valueInt:
-                    AddAttribute(elem, prop.OpenDocumentNameAttribute ?? throw new InvalidOperationException("OpenDocumentNameAttribute missing"), valueInt.ToString(CultureInfo.InvariantCulture));
-                    break;
-                case IEnumerable<OpenDocumentWritable> all:
-                    foreach (var item in all)
-                    {
-                        elem.Add(item.GetElement());
-                    }
-                    break;
-                case OpenDocumentWritable valueWritable:
-                    elem.Add(valueWritable.GetElement());
-                    break;
-                case XElement element:
-                    elem.Add(element);
-                    break;
-                default:
-                    if (value is not null && prop.OpenDocumentNameAttribute is not null)
-                    {
-                        AddAttribute(elem, prop.OpenDocumentNameAttribute, value?.ToString() ?? string.Empty);
-                    }
-                    break;
+                var boundAbove = element.Ancestors()
+                    .SelectMany(a => a.Attributes())
+                    .Any(a => a.IsNamespaceDeclaration && a.Name == declaration.Name && a.Value == declaration.Value);
+
+                if (boundAbove)
+                {
+                    declaration.Remove();
+                }
             }
         }
-
-        var content = TextContent();
-        if (content is not null)
-        {
-            elem.Value = content;
-        }
-
-        return elem;
     }
 }

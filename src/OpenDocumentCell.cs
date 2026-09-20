@@ -368,100 +368,23 @@ public class OpenDocumentCell
         writer.WriteEndElement();
     }
 
+    /// <summary>
+    /// This cell as an XML element.
+    /// </summary>
+    /// <returns>the table-cell element for this cell</returns>
+    /// <remarks>
+    /// Built by running <see cref="WriteTo(XmlWriter)"/> into a writer that appends to an XLinq
+    /// tree. A cell has the most branching of any element here - links, formulas, numbers,
+    /// multi line text, frames - and describing that twice is how the two paths came to spell the
+    /// non finite numbers differently. Now there is one description.
+    /// </remarks>
     internal XElement CreateElement()
     {
-        if (IsCovered)
+        var document = new XDocument();
+        using (var writer = document.CreateWriter())
         {
-            return OpenDocument.GetElementFor(new OpenDocumentCoveredTableCell());
+            WriteTo(writer);
         }
-        else
-        {
-            var cellNode = new OpenDocumentTableCell()
-            {
-                StyleName = Style is not null ? Style.Name : "ce1",
-            };
-            Debug.Assert(ColumnsSpanned > 0);
-            Debug.Assert(RowsSpanned > 0);
-            if (ColumnsSpanned != 1 || RowsSpanned != 1)
-            {
-                cellNode.NumberColumnsSpanned = ColumnsSpanned;
-                cellNode.NumberRowsSpanned = RowsSpanned;
-            }
-            Debug.Assert(NumberColumnsRepeated > 0);
-            if (NumberColumnsRepeated != 1)
-            {
-                cellNode.NumberColumnsRepeated = NumberColumnsRepeated;
-            }
-            XElement elem;
-            if (Link is not null)
-            {
-                cellNode.ValueType = "string";
-                elem = OpenDocument.GetElementFor(cellNode);
-
-                var realLink = Link.ToString();
-                if (realLink.StartsWith("sheet://", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    realLink = realLink[("sheet://".Length + 1)..];
-                }
-
-                var linkNode = new XElement(Text + "a", string.IsNullOrEmpty(Content) ? realLink.TrimEnd('/') : Content);
-                linkNode.SetAttributeValue(Xlink + "href", realLink);
-                linkNode.SetAttributeValue(Xlink + "type", "simple");
-                elem.Add(new XElement(Text + "p", linkNode));
-            }
-            else if (!string.IsNullOrEmpty(Formula))
-            {
-                if (FloatContent.HasValue)
-                {
-                    cellNode.ValueType = "float";
-                    cellNode.Formula = Formula;
-                    elem = OpenDocument.GetElementFor(cellNode);
-                    elem.Add(new XAttribute(Office + "value", FormatCellValue(FloatContent.Value)));
-                    elem.Add(new XElement(Text + "p", new XText(FloatContent.Value.ToString(CultureInfo.CurrentCulture))));
-                }
-                else if (!string.IsNullOrEmpty(Content))
-                {
-                    cellNode.ValueType = "string";
-                    cellNode.Formula = Formula;
-                    elem = OpenDocument.GetElementFor(cellNode);
-                    elem.Add(new XElement(Text + "p", EncodeTextContent(Content)));
-                }
-                else
-                {
-                    Debug.Fail("No value provided for the result of the formula");
-                    cellNode.Formula = Formula;
-                    elem = OpenDocument.GetElementFor(cellNode);
-                }
-            }
-            else if (!string.IsNullOrEmpty(Content))
-            {
-                cellNode.ValueType = "string";
-                elem = OpenDocument.GetElementFor(cellNode);
-                if (Content.Contains('\n'))
-                {
-                    foreach (var line in SplitContentLines(Content))
-                    {
-                        elem.Add(new XElement(Text + "p", EncodeTextContent(line)));
-                    }
-                }
-                else
-                {
-                    elem.Add(new XElement(Text + "p", EncodeTextContent(Content)));
-                }
-            }
-            else if (FloatContent.HasValue)
-            {
-                cellNode.ValueType = "float";
-                elem = OpenDocument.GetElementFor(cellNode);
-                elem.Add(new XAttribute(Office + "value", FormatCellValue(FloatContent.Value)));
-                elem.Add(new XElement(Text + "p", new XText(FloatContent.Value.ToString(CultureInfo.CurrentCulture))));
-            }
-            else
-            {
-                cellNode.Frame = Frame;
-                elem = OpenDocument.GetElementFor(cellNode);
-            }
-            return elem;
-        }
+        return document.Root!;
     }
 }
