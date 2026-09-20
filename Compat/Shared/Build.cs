@@ -69,7 +69,15 @@ internal static class Build
 
         var doc = new OpenDocumentSpreadsheet("Compat");
 
-        var cellStyles = AddStyles(doc, recipe.CellStyles);
+        // With UnregisteredStyle the last cell style is built but never put on the document, so
+        // the cells that point at it name a style the document does not carry. Nothing rejects
+        // that; the name goes on the cell and no style element is written for it.
+        //
+        // Registering a style under a key that is not its own name would be the neighbouring case,
+        // and is deliberately not generated: CreateAutomaticStyles asserts that the two agree, so
+        // it is a state the library rules out rather than one it supports. It only compares equal
+        // because a release build drops the assert.
+        var cellStyles = AddStyles(doc, recipe.CellStyles, recipe.UnregisteredStyle);
         var columnStyles = AddStyles(doc, recipe.ColumnStyles);
         var rowStyles = AddStyles(doc, recipe.RowStyles);
         AddStyles(doc, recipe.TableStyles);
@@ -430,13 +438,19 @@ internal static class Build
     /// <param name="doc">the document</param>
     /// <param name="recipes">the styles to add</param>
     /// <returns>the styles</returns>
-    private static OpenDocumentStyle[] AddStyles(OpenDocument doc, IReadOnlyList<StyleRecipe> recipes)
+    private static OpenDocumentStyle[] AddStyles(OpenDocument doc, IReadOnlyList<StyleRecipe> recipes, bool withholdLast = false)
     {
         var styles = new OpenDocumentStyle[recipes.Count];
 
         for (var i = 0; i < recipes.Count; i++)
         {
             styles[i] = MakeStyle(recipes[i]);
+
+            if (withholdLast && i == recipes.Count - 1)
+            {
+                continue;
+            }
+
             doc.Styles.Add(styles[i].Name!, styles[i]);
         }
 
@@ -495,6 +509,8 @@ internal static class Build
                 BorderLineWidth = cell.BorderLineWidth,
                 BorderLineWidthBottom = cell.BorderLineWidthBottom,
                 BorderLineWidthTop = cell.BorderLineWidthTop,
+                BorderLineWidthLeft = cell.BorderLineWidthLeft,
+                BorderLineWidthRight = cell.BorderLineWidthRight,
                 DecimalPlaces = cell.DecimalPlaces,
                 GlyphOrientationVertical = cell.GlyphOrientationVertical,
                 Shadow = cell.Shadow,
@@ -538,6 +554,11 @@ internal static class Build
                 TextShadow = text.TextShadow,
                 Hyphenate = text.Hyphenate,
                 HyphenationPushCharCount = text.HyphenationPushCharCount,
+                HyphenationRemainCharCount = text.HyphenationRemainCharCount,
+                CountryAsian = text.CountryAsian,
+                CountryComplex = text.CountryComplex,
+                FontCharsetAsian = text.FontCharsetAsian,
+                FontCharsetComplex = text.FontCharsetComplex,
                 Display = text.Display,
                 Condition = text.Condition,
             };
@@ -601,6 +622,11 @@ internal static class Build
                 Mirror = graphic.Mirror,
                 ImageOpacity = graphic.ImageOpacity,
                 TextareaHorizontalAlign = graphic.TextareaHorizontalAlign,
+                TextareaVerticalAlign = graphic.TextareaVerticalAlign,
+                Clip = graphic.Clip,
+                Red = graphic.Red,
+                Green = graphic.Green,
+                Blue = graphic.Blue,
             };
         }
 

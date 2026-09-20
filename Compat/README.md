@@ -96,6 +96,10 @@ So the generator covers, instead:
   complex text properties
 - cells carrying **several kinds of content at once**, which the writer resolves by precedence
   rather than by writing all of them
+- **every property a caller can set**: 138 of them, which is all of them bar three on
+  `OpenDocumentImage` that have no public setter in either version
+- documents with **no tables at all**, which the library fills in on the way out, and a cell naming
+  a style the document was never given
 
 The second half of that list came from reading a real caller of this library rather than from
 guessing. It writes its spans on the cell and hardly ever calls `SetCellSpan`, it fills rows
@@ -111,8 +115,8 @@ do not exist in 1.0.4 at all, so nothing can be compared against; they are cover
 
 ## What it found
 
-With the deliberate changes reverted, **2993 of 3000** generated documents came out byte for byte
-identical to 1.0.4, and the remaining 7 were refused by both versions for the same reason: a
+With the deliberate changes reverted, **2996 of 3000** generated documents came out byte for byte
+identical to 1.0.4, and the remaining 4 were refused by both versions for the same reason: a
 document holding two tables whose names both normalize to `Tabelle 1`, which `GetUniqueTableName`
 does not foresee because it compares the name before the setter rewrites it. Both versions agree,
 which is what is being measured here.
@@ -122,8 +126,21 @@ identical - and then reported everything identical again with the space encoder 
 broken, because nothing it generated ended in a *run* of spaces.
 
 One number is worth watching: how many distinct attribute names the corpus makes the writer emit.
-It is 144. If a property is added to the library and nothing here sets it, that figure does not
+It is 156. If a property is added to the library and nothing here sets it, that figure does not
 move, and no number of extra documents will notice the gap - only widening the generator will.
+
+The generator is now close to the end of what it can reach. Every property a caller can set is
+set. What is left out cannot be reached from any public API:
+
+- `OpenDocumentImage.Type`, `Show` and `Actuate` have no public setter in either version
+- `style:page-layout` and its children - `page-layout-properties`, `header-style`, `footer-style`,
+  `header-footer-properties` - are never written by the library at all, although every document's
+  master page points at one by name. The code that would build it is commented out
+- `style:fraction` belongs to a number style the library never builds
+
+So a document this library writes always carries a `style:page-layout-name="pm1"` that resolves to
+nothing. Both versions do it, so the comparison stays clean; it is noted here because it looks like
+a gap in the corpus and is not one.
 
 A comparison that cannot fail is not evidence. Break something on purpose before trusting a clean
 run. Those the corpus catches:
@@ -140,6 +157,8 @@ run. Those the corpus catches:
 | a formula taking precedence over a link on the same cell | 282 |
 | `AutoColumnProcessor` reading its widths as cm rather than mm | 454 |
 | `style:master-page-name` written as `style:master-page` | 444 |
+| `style:border-line-width-left` renamed | 344 |
+| the filled in default table named `Sheet1` rather than `Tabelle 1` | 20 |
 
 Every one of those is reachable only because the corpus sets the property in question. Each of them
 passed unnoticed against an earlier version of this corpus.

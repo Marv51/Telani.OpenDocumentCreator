@@ -198,6 +198,10 @@ internal sealed class CellProps
 
     public string? BorderLineWidthTop { get; init; }
 
+    public string? BorderLineWidthLeft { get; init; }
+
+    public string? BorderLineWidthRight { get; init; }
+
     public string? DecimalPlaces { get; init; }
 
     public string? GlyphOrientationVertical { get; init; }
@@ -261,6 +265,16 @@ internal sealed class TextProps
     public string? Hyphenate { get; init; }
 
     public string? HyphenationPushCharCount { get; init; }
+
+    public string? HyphenationRemainCharCount { get; init; }
+
+    public string? CountryAsian { get; init; }
+
+    public string? CountryComplex { get; init; }
+
+    public string? FontCharsetAsian { get; init; }
+
+    public string? FontCharsetComplex { get; init; }
 
     public string? Display { get; init; }
 
@@ -343,6 +357,16 @@ internal sealed class GraphicProps
     public string? ImageOpacity { get; init; }
 
     public string? TextareaHorizontalAlign { get; init; }
+
+    public string? TextareaVerticalAlign { get; init; }
+
+    public string? Clip { get; init; }
+
+    public string? Red { get; init; }
+
+    public string? Green { get; init; }
+
+    public string? Blue { get; init; }
 }
 
 /// <summary>
@@ -436,6 +460,7 @@ internal sealed record Recipe(
     int Seed,
     DocumentKind Kind,
     string DocumentFont,
+    bool UnregisteredStyle,
     IReadOnlyList<StyleRecipe> CellStyles,
     IReadOnlyList<StyleRecipe> ColumnStyles,
     IReadOnlyList<StyleRecipe> RowStyles,
@@ -544,6 +569,8 @@ internal sealed record Recipe(
 
     private static readonly string[] Mirrors = ["none", "horizontal", "vertical"];
 
+    private static readonly string[] Clips = ["auto", "rect(0cm, 0cm, 0cm, 0cm)"];
+
     private static readonly string[] Aligns = ["left", "center", "right", "justify"];
 
     private static readonly string[] DataStyles = ["N0", "N2", "N109"];
@@ -582,8 +609,10 @@ internal sealed record Recipe(
 
         var extra = random.Next(0, 2) == 0 ? Styles(random, StyleTarget.Paragraph, "P", 1) : [];
 
+        // Now and then a spreadsheet with no tables at all, which the library fills in with one
+        // of its own on the way out.
         var tables = new List<TableRecipe>();
-        var tableCount = random.Next(1, 4);
+        var tableCount = random.Next(0, 20) == 0 ? 0 : random.Next(1, 4);
         for (var i = 0; i < tableCount; i++)
         {
             tables.Add(GenerateTable(random, i, cellStyles.Count, columnStyles.Count, tableStyles.Count, graphicStyles.Count));
@@ -596,7 +625,8 @@ internal sealed record Recipe(
         return new Recipe(
             seed,
             kind,
-            Fonts[random.Next(Fonts.Length)],
+            random.Next(0, 10) == 0 ? string.Empty : Fonts[random.Next(Fonts.Length)],
+            random.Next(0, 8) == 0,
             cellStyles,
             columnStyles,
             rowStyles,
@@ -672,6 +702,8 @@ internal sealed record Recipe(
         BorderLineWidth = MaybeOne(random, LineWidths),
         BorderLineWidthBottom = MaybeOne(random, LineWidths),
         BorderLineWidthTop = MaybeOne(random, LineWidths),
+        BorderLineWidthLeft = MaybeOne(random, LineWidths),
+        BorderLineWidthRight = MaybeOne(random, LineWidths),
         DecimalPlaces = MaybeOne(random, Counts),
         GlyphOrientationVertical = MaybeOne(random, Angles),
         Shadow = MaybeOne(random, Shadows),
@@ -709,6 +741,11 @@ internal sealed record Recipe(
         TextShadow = MaybeOne(random, Shadows),
         Hyphenate = MaybeOne(random, Booleans),
         HyphenationPushCharCount = MaybeOne(random, Counts),
+        HyphenationRemainCharCount = MaybeOne(random, Counts),
+        CountryAsian = MaybeOne(random, Countries),
+        CountryComplex = MaybeOne(random, Countries),
+        FontCharsetAsian = MaybeOne(random, Charsets),
+        FontCharsetComplex = MaybeOne(random, Charsets),
         Display = MaybeOne(random, Displays),
         Condition = MaybeOne(random, Conditions),
     };
@@ -760,6 +797,11 @@ internal sealed record Recipe(
         Mirror = MaybeOne(random, Mirrors),
         ImageOpacity = MaybeOne(random, Opacities),
         TextareaHorizontalAlign = MaybeOne(random, Aligns),
+        TextareaVerticalAlign = MaybeOne(random, Aligns),
+        Clip = MaybeOne(random, Clips),
+        Red = MaybeOne(random, Opacities),
+        Green = MaybeOne(random, Opacities),
+        Blue = MaybeOne(random, Opacities),
     };
 
     /// <summary>
