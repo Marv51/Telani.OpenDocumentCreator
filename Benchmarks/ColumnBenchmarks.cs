@@ -1,4 +1,4 @@
-using BenchmarkDotNet.Attributes;
+﻿using BenchmarkDotNet.Attributes;
 
 namespace OpenDocumentCreator.Benchmarks;
 
@@ -10,7 +10,9 @@ namespace OpenDocumentCreator.Benchmarks;
 /// <see cref="AddColumnsToExistingTable"/> is the telling one: the number of added columns is
 /// fixed, so any growth with <see cref="ExistingColumns"/> comes from the per-call scan.
 /// </summary>
-[ShortRunJob]
+// Deliberately on the default job rather than ShortRunJob. ShortRunJob runs three iterations,
+// which on cases this fast produced confidence intervals wider than the mean; the full job costs
+// a few minutes more across the suite and is roughly fifty times tighter.
 [MemoryDiagnoser]
 public class ColumnBenchmarks
 {

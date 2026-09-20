@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 using BenchmarkDotNet.Attributes;
 
 namespace OpenDocumentCreator.Benchmarks;
@@ -11,7 +11,9 @@ namespace OpenDocumentCreator.Benchmarks;
 /// reflection driven property walk, and exists purely to show how much of the per cell cost is
 /// that machinery rather than the XML itself.
 /// </summary>
-[ShortRunJob]
+// Deliberately on the default job rather than ShortRunJob. ShortRunJob runs three iterations,
+// which on cases this fast produced confidence intervals wider than the mean; the full job costs
+// a few minutes more across the suite and is roughly fifty times tighter.
 [MemoryDiagnoser]
 public class CellSerializationBenchmarks
 {
