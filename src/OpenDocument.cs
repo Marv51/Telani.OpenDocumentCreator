@@ -126,9 +126,6 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     /// </summary>
     private int styleCountWhenIndexed = -1;
 
-    /// <summary>The suffix to try next when naming a generated column style.</summary>
-    private int nextAutoColumnStyleNumber;
-
     /// <summary>
     /// Finds the column style carrying these properties, creating and registering it if the
     /// document does not have one yet.
@@ -166,17 +163,23 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     }
 
     /// <summary>
-    /// Produces a free name for a generated column style. Counting styles rather than generated
-    /// names used to be able to collide, either with a style a caller named "auto_col_N" itself or
-    /// after a style was removed.
+    /// Produces a free name for a generated column style.
     /// </summary>
     /// <returns>a name no style in the document currently uses</returns>
+    /// <remarks>
+    /// The first candidate is the name this library has always used, the current style count, so
+    /// a document that worked before keeps the style names it had. Counting styles can land on a
+    /// name that is already taken - a caller may have named a style "auto_col_3" itself, or one
+    /// may have been removed - and that used to throw when the style was added. It now walks
+    /// forward to the first free number instead.
+    /// </remarks>
     private string NextAutoColumnStyleName()
     {
+        var number = Styles.Count;
         string name;
         do
         {
-            name = "auto_col_" + nextAutoColumnStyleNumber++;
+            name = "auto_col_" + number++;
         }
         while (Styles.ContainsKey(name));
         return name;
