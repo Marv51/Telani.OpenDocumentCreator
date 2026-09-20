@@ -129,15 +129,46 @@ public class OpenDocumentTable : OpenDocumentWritable
     /// <summary>
     /// This finalizes the columns. Meaning any kind of final validation or cleaning up work before the document is saved.
     /// </summary>
-    internal void FinishColumns()
+    internal IDisposable PadColumnsWhileSerializing() => new ColumnPadding(this);
+
+    /// <summary>
+    /// Pads the table out to the column limit for as long as it is held, and puts the last column
+    /// back the way it was when disposed.
+    ///
+    /// The padding is an artefact of the file format, not of the document: a reader expects the
+    /// full width, but the table in memory has only the columns the caller added. Writing the
+    /// padded value back permanently made saving change the document, so a second save of the same
+    /// document counted the padding as real columns and produced a table that claimed a handful of
+    /// columns while every row still held 16384 cells.
+    /// </summary>
+    private sealed class ColumnPadding : IDisposable
     {
-        if (Columns.Count == 0)
+        private readonly OpenDocumentTable table;
+        private readonly Column? padded;
+        private readonly string previousRepeated;
+
+        internal ColumnPadding(OpenDocumentTable table)
         {
-            return;
+            this.table = table;
+
+            if (table.Columns.Count == 0)
+            {
+                previousRepeated = string.Empty;
+                return;
+            }
+
+            padded = table.Columns[^1];
+            previousRepeated = padded.NumberColumnsRepeated;
+            padded.NumberColumnsRepeated = (table.excelColumnLimit - table.TotalNumberOfColumns()).ToString(CultureInfo.InvariantCulture);
         }
 
-        var last = Columns.Last();
-        last.NumberColumnsRepeated = (excelColumnLimit - TotalNumberOfColumns()).ToString(CultureInfo.InvariantCulture);
+        public void Dispose()
+        {
+            if (padded is not null)
+            {
+                padded.NumberColumnsRepeated = previousRepeated;
+            }
+        }
     }
 
     /// <summary>

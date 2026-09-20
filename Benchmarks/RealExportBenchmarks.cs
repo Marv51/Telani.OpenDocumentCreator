@@ -1,4 +1,4 @@
-using BenchmarkDotNet.Attributes;
+﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Engines;
 using OpenDocumentCreator.DataTypes;
 using OpenDocumentCreator.Styles;
@@ -17,7 +17,7 @@ namespace OpenDocumentCreator.Benchmarks;
 /// a document of the size people actually export, so that time can be told apart from the time an
 /// application spends producing the data.
 /// </summary>
-[SimpleJob(RunStrategy.Monitoring, warmupCount: 1, iterationCount: 5)]
+[SimpleJob(warmupCount: 1, iterationCount: 8)]
 [MemoryDiagnoser]
 public class RealExportBenchmarks
 {
@@ -97,8 +97,8 @@ public class RealExportBenchmarks
     [Benchmark]
     public OpenDocumentSpreadsheet Build() => BuildDocument();
 
-    /// <summary>Rebuilds the document before each measured save, outside the measured region.</summary>
-    [IterationSetup(Target = nameof(Save))]
+    /// <summary>Builds the document to save once, outside the measured region.</summary>
+    [GlobalSetup(Target = nameof(Save))]
     public void PrepareDocument() => prepared = BuildDocument();
 
     /// <summary>Serializing and zipping an already built document.</summary>
