@@ -111,6 +111,88 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     /// <value>Dictionary mapping style name to style</value>
     public Dictionary<string, OpenDocumentStyle> Styles { get; } = [];
 
+    /// <summary>
+    /// Column styles by the properties they carry, so that reusing one does not need a scan of
+    /// every style in the document.
+    /// </summary>
+    private readonly Dictionary<TableColumnProperties, string> tableColumnStyleIndex = [];
+
+    /// <summary>
+    /// How many styles the document held when <see cref="tableColumnStyleIndex"/> was last known to
+    /// be complete. <see cref="Styles"/> is public and mutable, so a differing count means the index
+    /// has to be rebuilt before it can be trusted to be exhaustive.
+    /// </summary>
+    private int styleCountWhenIndexed = -1;
+
+    /// <summary>The suffix to try next when naming a generated column style.</summary>
+    private int nextAutoColumnStyleNumber;
+
+    /// <summary>
+    /// Finds the column style carrying these properties, creating and registering it if the
+    /// document does not have one yet.
+    /// </summary>
+    /// <param name="properties">the column properties the style has to carry</param>
+    /// <returns>a style of family <see cref="StyleFamily.TableColumn"/> with those properties</returns>
+    internal OpenDocumentStyle GetOrAddTableColumnStyle(TableColumnProperties properties)
+    {
+        if (styleCountWhenIndexed != Styles.Count)
+        {
+            RebuildTableColumnStyleIndex();
+        }
+
+        // The index can name a style that has since been replaced, so confirm the hit before
+        // handing it back.
+        if (tableColumnStyleIndex.TryGetValue(properties, out var name)
+            && Styles.TryGetValue(name, out var found)
+            && found.Family == StyleFamily.TableColumn
+            && found.TableColumnProperties is not null
+            && found.TableColumnProperties == properties)
+        {
+            return found;
+        }
+
+        var newStyle = new OpenDocumentStyle
+        {
+            Name = NextAutoColumnStyleName(),
+            Family = StyleFamily.TableColumn,
+            TableColumnProperties = properties,
+        };
+        Styles.Add(newStyle.Name, newStyle);
+        tableColumnStyleIndex[properties] = newStyle.Name;
+        styleCountWhenIndexed = Styles.Count;
+        return newStyle;
+    }
+
+    /// <summary>
+    /// Produces a free name for a generated column style. Counting styles rather than generated
+    /// names used to be able to collide, either with a style a caller named "auto_col_N" itself or
+    /// after a style was removed.
+    /// </summary>
+    /// <returns>a name no style in the document currently uses</returns>
+    private string NextAutoColumnStyleName()
+    {
+        string name;
+        do
+        {
+            name = "auto_col_" + nextAutoColumnStyleNumber++;
+        }
+        while (Styles.ContainsKey(name));
+        return name;
+    }
+
+    private void RebuildTableColumnStyleIndex()
+    {
+        tableColumnStyleIndex.Clear();
+        foreach (var style in Styles.Values)
+        {
+            if (style.Family == StyleFamily.TableColumn && style.TableColumnProperties is not null && style.Name is not null)
+            {
+                tableColumnStyleIndex[style.TableColumnProperties] = style.Name;
+            }
+        }
+        styleCountWhenIndexed = Styles.Count;
+    }
+
     /// <inheritdoc />
     public OpenDocumentStyle GetStyleByName(string s) => Styles[s] ?? throw new InvalidOperationException("Style not found");
 
