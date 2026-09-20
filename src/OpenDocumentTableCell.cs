@@ -137,45 +137,6 @@ internal class OpenDocumentTableCell : OpenDocumentWritable
     [OpenDocumentName]
     public OpenDocumentFrame? Frame { get; set; } = null;
 
-    // There are a lot of instances of this element, we want serialization to be as fast as possible.
-    internal override XElement GetElement()
-    {
-        var elem = new XElement(OpenDocument.Table + OpenDocumentElementName);
-
-        if (NumberColumnsRepeated is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Table + "number-columns-repeated", NumberColumnsRepeated));
-        }
-        if (NumberColumnsSpanned is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Table + "number-columns-spanned", NumberColumnsSpanned));
-        }
-        if (NumberRowsSpanned is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Table + "number-rows-spanned", NumberRowsSpanned));
-        }
-        if (StyleName is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Table + "style-name", StyleName));
-        }
-        if (ValueType is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Office + "value-type", ValueType));
-        }
-        if (Formula is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Table + "formula", Formula));
-        }
-        if (Value is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Office + "value", Value));
-        }
-        if (Frame is not null)
-        {
-            elem.Add(Frame.GetElement());
-        }
-        return elem;
-    }
 
     /// <inheritdoc />
     internal override void WriteTo(XmlWriter writer, Action<XmlWriter>? extraAttributes, Action<XmlWriter>? extraChildren)
