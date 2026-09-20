@@ -137,7 +137,6 @@ internal class OpenDocumentTableCell : OpenDocumentWritable
     [OpenDocumentName]
     public OpenDocumentFrame? Frame { get; set; } = null;
 
-
     /// <inheritdoc />
     internal override void WriteTo(XmlWriter writer, Action<XmlWriter>? extraAttributes, Action<XmlWriter>? extraChildren)
     {
