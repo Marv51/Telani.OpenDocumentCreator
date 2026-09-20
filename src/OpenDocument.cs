@@ -198,13 +198,15 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     /// <inheritdoc />
     public OpenDocumentStyle GetStyleByName(string s) => Styles[s] ?? throw new InvalidOperationException("Style not found");
 
-    private XDocument CreateStyleFile(string documentFont) => CreateDocument(new OpenDocumentDocumentStyles()
+    private OpenDocumentDocumentStyles CreateStyleFileRoot(string documentFont) => new()
     {
         FontFaceDecls = CreateFontFaceDecl(),
         Styles = CreateStyles(documentFont),
         AutomaticStyles = CreateAutomaticStyles(),
         MasterStyles = CreateMasterStyles(),
-    });
+    };
+
+    private XDocument CreateStyleFile(string documentFont) => CreateDocument(CreateStyleFileRoot(documentFont));
 
     private static OpenDocumentMasterStyles CreateMasterStyles() => new()
     {
@@ -363,6 +365,18 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
     /// <returns>content.xml as an element tree</returns>
     internal XDocument BuildContentFileForTesting() => CreateContentFile();
 
+    /// <summary>The styles part as the element model builds it.</summary>
+    /// <returns>styles.xml as an element tree</returns>
+    internal XDocument BuildStyleFileForTesting() => CreateStyleFile("Calibri");
+
+    /// <summary>The meta part as the element model builds it.</summary>
+    /// <returns>meta.xml as an element tree</returns>
+    internal XDocument BuildMetaFileForTesting() => MetaData.XmlMeta;
+
+    /// <summary>The manifest as the element model builds it.</summary>
+    /// <returns>manifest.xml as an element tree</returns>
+    internal XDocument BuildManifestForTesting() => CreateManifest();
+
     /// <summary>
     /// Writes the document's content directly, without building it as an element tree first.
     /// </summary>
@@ -444,6 +458,27 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
         return ("style", Style.NamespaceName);
     }
 
+    private OpenDocumentManifest CreateManifestRoot()
+    {
+        var entries = new List<ManifestEntry>
+                {
+                    new() { FullPath = "/", MediaTyp = GetMimeType() },
+                    new() { FullPath = "styles.xml", MediaTyp = "text/xml" },
+                    new() { FullPath = "content.xml", MediaTyp = "text/xml" },
+                    new() { FullPath = "meta.xml", MediaTyp = "text/xml" },
+                };
+        foreach (var (path, _) in resources)
+        {
+            entries.Add(new ManifestEntry() { FullPath = path, MediaTyp = "image/png" });
+        }
+
+        return new OpenDocumentManifest
+        {
+            Version = "1.2",
+            Entries = entries,
+        };
+    }
+
     private XDocument CreateManifest()
     {
         var entries = new List<ManifestEntry>
@@ -458,11 +493,7 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
             entries.Add(new ManifestEntry() { FullPath = path, MediaTyp = "image/png" });
         }
 
-        var root = new OpenDocumentManifest
-        {
-            Version = "1.2",
-            Entries = entries,
-        };
+        var root = CreateManifestRoot();
         var manifestDoc = CreateDocument(root);
 
         /*#if DEBUG
@@ -559,9 +590,7 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
 
     private void WriteZipFile(Stream fileToSave, bool unzip, string documentFont, bool leaveOpen)
     {
-        var styleFile = CreateStyleFile(documentFont);
         var metaFile = MetaData.XmlMeta;
-        var manifestFile = CreateManifest();
         var mimeType = GetMimeType();
         if (unzip)
         {
@@ -573,7 +602,7 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
                 if (!Directory.Exists(dirName))
                 {
                     Directory.CreateDirectory(dirName);
-                    styleFile.Save(Path.Combine(dirName, "styles.xml"));
+                    CreateStyleFile(documentFont).Save(Path.Combine(dirName, "styles.xml"));
                     CreateContentFile().Save(Path.Combine(dirName, "content.xml"));
                     metaFile.Save(Path.Combine(dirName, "meta.xml"));
                     File.WriteAllText(Path.Combine(dirName, "mimetype"), mimeType);
@@ -582,7 +611,7 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
                 if (!Directory.Exists(dirName_meta))
                 {
                     Directory.CreateDirectory(dirName_meta);
-                    manifestFile.Save(Path.Combine(dirName_meta, "manifest.xml"));
+                    CreateManifest().Save(Path.Combine(dirName_meta, "manifest.xml"));
                 }
                 foreach (var (path, file) in resources)
                 {
@@ -605,39 +634,52 @@ public abstract class OpenDocument(string creatorName = "") : IStyleLookup
         {
             AddBinaryEntry(zip, path, file, path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? CompressionLevel.Optimal : CompressionLevel.NoCompression);
         }
-        AddXMLEntry(zip, "styles.xml", styleFile);
+        AddStreamedXMLEntry(zip, "styles.xml", CreateStyleFileRoot(documentFont));
         AddStreamedXMLEntry(zip, "content.xml", CreateStreamingContentRoot(documentFont));
-        AddXMLEntry(zip, "meta.xml", metaFile);
-        AddXMLEntry(zip, "META-INF/manifest.xml", manifestFile);
+
+        // meta.xml is hand built as a small tree rather than from a writable, so there is nothing
+        // to stream; it goes through the same entry writer only so that every part shares one set
+        // of writer settings and one byte order mark.
+        AddStreamedXMLEntry(zip, "meta.xml", metaFile);
+        AddStreamedXMLEntry(zip, "META-INF/manifest.xml", CreateManifestRoot());
     }
 
     /// <summary>
     /// Writes one part straight through an XmlWriter, without building the whole part as an
     /// element tree first.
     /// </summary>
+    private static void AddStreamedXMLEntry(ZipArchive zip, string path, XDocument document, CompressionLevel compression = CompressionLevel.Optimal)
+        => WriteEntry(zip, path, compression, writer => document.Root?.WriteTo(writer));
+
     private static void AddStreamedXMLEntry(ZipArchive zip, string path, OpenDocumentWritable root, CompressionLevel compression = CompressionLevel.Optimal)
+        => WriteEntry(zip, path, compression, root.WriteTo);
+
+    private static void WriteEntry(ZipArchive zip, string path, CompressionLevel compression, Action<XmlWriter> writeRoot)
     {
         var newEntry = zip.CreateEntry(path, compression);
         using var archiveStream = newEntry.Open();
 
         // Byte for byte what XDocument.Save produced for these parts: the same declaration, UTF-8
-        // *with* a byte order mark, and no indentation. Encoding.UTF8 emits the mark; a
-        // UTF8Encoding(false) would silently drop it and change every file this library writes.
+        // with a byte order mark, and no indentation.
+        //
+        // The mark is written here rather than left to the writer. Whether XmlWriter emits one
+        // depends on how it was handed the stream, and getting two of them produces a file no
+        // parser will read, so the encoding is set to the variant that emits none and the mark is
+        // written explicitly.
         var settings = new XmlWriterSettings
         {
             Indent = false,
             CloseOutput = false,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         };
 
-        // XDocument.Save wrote a UTF-8 byte order mark, so write one here too rather than silently
-        // changing the first three bytes of every file the library produces.
         var preamble = Encoding.UTF8.GetPreamble();
         archiveStream.Write(preamble, 0, preamble.Length);
 
         using (var writer = XmlWriter.Create(archiveStream, settings))
         {
             writer.WriteStartDocument(true);
-            root.WriteTo(writer);
+            writeRoot(writer);
             writer.WriteEndDocument();
         }
         archiveStream.Flush();
