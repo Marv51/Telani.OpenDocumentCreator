@@ -68,6 +68,32 @@ public class OpenDocumentTable : OpenDocumentWritable
     private string? _name;
 
     /// <summary>
+    /// The column total carried forward by <see cref="AddColumn(Column)"/>, so that adding a
+    /// column does not have to re-add every existing one.
+    /// </summary>
+    private int cachedTotalColumns;
+
+    /// <summary>
+    /// How many entries <see cref="_columns"/> held when <see cref="cachedTotalColumns"/> was last
+    /// correct. <see cref="Columns"/> is a mutable list, so columns can be added or removed without
+    /// going through <see cref="AddColumn(Column)"/>; a differing count means the carried total has
+    /// to be thrown away.
+    /// </summary>
+    private int countWhenTotalCached;
+
+    private static int ParseNumberColumnsRepeated(Column column)
+        => int.TryParse(column.NumberColumnsRepeated, NumberStyles.Integer, CultureInfo.InvariantCulture, out var repeated) ? repeated : 0;
+
+    /// <summary>
+    /// Recomputes the carried column total from scratch.
+    /// </summary>
+    private void RecountColumns()
+    {
+        cachedTotalColumns = TotalNumberOfColumns();
+        countWhenTotalCached = _columns.Count;
+    }
+
+    /// <summary>
     /// table:name 19.673.13,
     ///
     /// The table:name attribute specifies the name of a table.
@@ -192,8 +218,24 @@ public class OpenDocumentTable : OpenDocumentWritable
     /// <exception cref="System.InvalidOperationException">if this would exceed the maximum size of the table.</exception>
     public void AddColumn(Column c)
     {
+        ArgumentNullException.ThrowIfNull(c, nameof(c));
+
         _columns.Add(c);
-        if (TotalNumberOfColumns() > excelColumnLimit)
+
+        // Recomputing the whole total here made adding a column cost O(columns), and so
+        // building a table cost O(columns^2). Carry the total forward instead, and fall back
+        // to a full recount whenever the column list changed behind our back.
+        if (countWhenTotalCached == _columns.Count - 1)
+        {
+            cachedTotalColumns += ParseNumberColumnsRepeated(c);
+            countWhenTotalCached = _columns.Count;
+        }
+        else
+        {
+            RecountColumns();
+        }
+
+        if (cachedTotalColumns > excelColumnLimit)
         {
             // it appears that there always have to be 16385 columns, not sure why, couldn't find a source
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Tables shall not have more than {0} Columns", excelColumnLimit));
@@ -218,7 +260,10 @@ public class OpenDocumentTable : OpenDocumentWritable
         var count = 0;
         if (_columns.Count > 0)
         {
-            count = _columns.Select(x => x.NumberColumnsRepeated).Select(a => int.TryParse(a, out var b) ? b : 0).Aggregate((a, b) => a + b);
+            foreach (var column in _columns)
+            {
+                count += ParseNumberColumnsRepeated(column);
+            }
         }
         return count;
     }
