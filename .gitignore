@@ -199,3 +199,6 @@ ModelManifest.xml
 
 # Local output of demo runs
 DemoApp/out/
+
+# BenchmarkDotNet output
+BenchmarkDotNet.Artifacts/
