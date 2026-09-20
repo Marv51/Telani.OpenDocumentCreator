@@ -116,7 +116,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
 
         try
         {
-            var target_cell = Rows[y].ElementAt(x);
+            var target_cell = Rows[y][x];
 
             if (content is OpenDocumentCell cell)
             {
@@ -176,7 +176,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
         }
         EnsureEnoughRows(y + rowSpan - 1);
 
-        OpenDocumentCell cell = Rows[y].ElementAt(x);
+        OpenDocumentCell cell = Rows[y][x];
 
         if (cell.IsCovered)
         {
@@ -188,7 +188,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
         {
             for (int r = 0; r < cell.RowsSpanned; r++)
             {
-                Rows[y + r].ElementAt(x + c).IsCovered = false;
+                Rows[y + r][x + c].IsCovered = false;
             }
         }
 
@@ -197,7 +197,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
         {
             for (int r = 0; r < rowSpan; r++)
             {
-                var element = Rows[y + r].ElementAt(x + c);
+                var element = Rows[y + r][x + c];
                 if (element.IsCovered || element.RowsSpanned > 1 || element.ColumnsSpanned > 1)
                 {
                     throw new InvalidOperationException("The cell (" + (x + c) + "," + (y + r) + ") is already covered for table " + Name);
@@ -369,7 +369,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
 
         for (int i = 0; i < row.Count; i++)
         {
-            OpenDocumentCell cell = row.ElementAt(i);
+            OpenDocumentCell cell = row[i];
             var wrote = false;
             if (cell.Content is not null)
             {
@@ -404,7 +404,7 @@ public class AutoGrid : OpenDocumentTable, IGridWriter
             }
             if (!wrote)
             {
-                Rows[y].ElementAt(i + x).Style = cell.Style;
+                Rows[y][i + x].Style = cell.Style;
             }
         }
     }
