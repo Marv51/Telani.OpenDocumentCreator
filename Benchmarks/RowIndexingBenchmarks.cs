@@ -11,7 +11,10 @@ namespace OpenDocumentCreator.Benchmarks;
 /// <see cref="WriteToFirstColumn"/> is the same work at position zero and should not move at all,
 /// which is what makes the first one readable.
 /// </summary>
-[ShortRunJob]
+// Deliberately on the default job rather than ShortRunJob. These cases run in microseconds, so
+// the full job costs a few minutes for the whole class and buys roughly fifty times tighter
+// confidence intervals; ShortRunJob's three iterations put an error bar wider than the mean on
+// some of these.
 [MemoryDiagnoser]
 public class RowIndexingBenchmarks
 {
