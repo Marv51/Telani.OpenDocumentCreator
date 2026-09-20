@@ -50,8 +50,13 @@ public sealed class OpenDocumentSpreadsheet(string creatorName = "") : OpenDocum
 
         foreach (var t in Tables)
         {
-            t.FinishColumns();
-            var tableNode = GetElementFor(t);
+            // The padding is put back as soon as the columns have been serialized, so that saving
+            // leaves the document exactly as it found it.
+            XElement tableNode;
+            using (t.PadColumnsWhileSerializing())
+            {
+                tableNode = GetElementFor(t);
+            }
 
             foreach (var r in t.Rows)
             {
