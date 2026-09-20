@@ -65,25 +65,6 @@ internal sealed class OpenDocumentTableRow : OpenDocumentWritable
     [OpenDocumentName]
     public List<OpenDocumentTableCell> TableCells { get; private set; } = [];
 
-    // There are a lot of instances of this element, we want serialization to be as fast as possible.
-    internal override XElement GetElement()
-    {
-        var elem = new XElement(OpenDocument.Table + OpenDocumentElementName);
-
-        if (NumberRowsRepeated is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Table + "number-rows-repeated", NumberRowsRepeated));
-        }
-        if (StyleName is not null)
-        {
-            elem.Add(new XAttribute(OpenDocument.Table + "style-name", StyleName));
-        }
-        foreach (var item in TableCells)
-        {
-            elem.Add(item.GetElement());
-        }
-        return elem;
-    }
 
     /// <inheritdoc />
     internal override void WriteTo(XmlWriter writer, Action<XmlWriter>? extraAttributes, Action<XmlWriter>? extraChildren)
