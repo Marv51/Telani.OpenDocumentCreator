@@ -51,10 +51,112 @@ internal enum EmptyLineMode
 internal enum BulkKind
 {
     WriteColumn,
+    WriteColumns,
     WriteRow,
     WriteRowsArray,
     WriteRowsEnumerable,
 }
+
+/// <summary>
+/// How a row passed to one of the row writers is put together. The released version offers
+/// several ways to fill a row and they do not all end in the same place.
+/// </summary>
+internal enum RowBuild
+{
+    AddCell,
+    AddString,
+    AddTuple,
+    InsertCell,
+    InsertCellWithStyle,
+    InsertCells,
+    TemplateString,
+    AddThenReplace,
+}
+
+/// <summary>
+/// A measurement: a number, and an index into the library's Unit enum.
+/// </summary>
+internal sealed record MeasureRecipe(decimal Value, int Unit);
+
+/// <summary>
+/// A colour, or the transparent one.
+/// </summary>
+internal sealed record ColorRecipe(byte Red, byte Green, byte Blue, bool Transparent);
+
+/// <summary>
+/// A border line: a width, an index into the library's LineStyle enum, and a colour.
+/// </summary>
+internal sealed record LineRecipe(MeasureRecipe Width, int Style, ColorRecipe Color);
+
+/// <summary>
+/// A style, described without naming a library type.
+/// </summary>
+/// <remarks>
+/// Enum valued properties are carried as an index into the corresponding library enum, and null
+/// means leave the property unset. Build turns an index into a member by position, so every member
+/// of every one of those enums is reachable without this file having to name any of them.
+/// </remarks>
+/// <summary>
+/// Which family a style belongs to. Mirrors the library's StyleFamily.
+/// </summary>
+internal enum StyleTarget
+{
+    TableCell,
+    TableColumn,
+    TableRow,
+    Table,
+    Paragraph,
+    Graphic,
+}
+
+internal sealed record StyleRecipe(
+    string Name,
+    StyleTarget Family,
+    string? ParentName,
+    string? DataStyleName,
+    CellProps? Cell,
+    ParagraphProps? Paragraph,
+    TextProps? Text,
+    ColumnProps? Column,
+    RowProps? Row,
+    GraphicProps? Graphic);
+
+internal sealed record CellProps(
+    LineRecipe? Border,
+    LineRecipe? BorderLeft,
+    LineRecipe? BorderTop,
+    LineRecipe? Diagonal,
+    ColorRecipe? BackgroundColor,
+    int? VerticalAlign,
+    int? WrapOption,
+    int? TextAlignSource,
+    int? CellProtect,
+    int? RotationAlign,
+    string? RotationAngle,
+    string? Padding,
+    string? PaddingLeft,
+    string? DecimalPlaces,
+    int? ShrinkToFit,
+    int? PrintContent);
+
+internal sealed record ParagraphProps(int? TextAlign, MeasureRecipe? MarginLeft, string? LineBreak);
+
+internal sealed record TextProps(
+    int? FontWeight,
+    int? FontStyle,
+    MeasureRecipe? FontSize,
+    string? FontFamily,
+    ColorRecipe? Color,
+    ColorRecipe? BackgroundColor,
+    string? Language,
+    int? UnderlineStyle,
+    string? LetterSpacing);
+
+internal sealed record ColumnProps(MeasureRecipe? ColumnWidth, int? UseOptimal, int? BreakBefore, string? RelativeColumnWidth);
+
+internal sealed record RowProps(MeasureRecipe? RowHeight, MeasureRecipe? MinRowHeight, int? UseOptimal, ColorRecipe? BackgroundColor, int? BreakBefore);
+
+internal sealed record GraphicProps(int? Fill, ColorRecipe? FillColor, int? Stroke, MeasureRecipe? StrokeWidth, ColorRecipe? StrokeColor, string? Opacity);
 
 internal sealed record CellStep(
     int X,
@@ -65,7 +167,10 @@ internal sealed record CellStep(
     int StyleIndex,
     EmptyLineMode EmptyLines,
     int Repeat,
-    FrameKind Frame);
+    FrameKind Frame,
+    int ColumnsSpanned,
+    int RowsSpanned,
+    bool IsCovered);
 
 internal sealed record SpanStep(int X, int Y, int RowSpan, int ColumnSpan);
 
@@ -73,7 +178,7 @@ internal sealed record SpanStep(int X, int Y, int RowSpan, int ColumnSpan);
 /// A bulk write. <see cref="Values"/> is a list of rows of strings; the single row writers use the
 /// first one and WriteColumn uses the first column of it.
 /// </summary>
-internal sealed record BulkStep(BulkKind Kind, int X, int Y, IReadOnlyList<IReadOnlyList<string>> Values, int StyleIndex);
+internal sealed record BulkStep(BulkKind Kind, RowBuild Build, int X, int Y, IReadOnlyList<IReadOnlyList<string>> Values, int StyleIndex);
 
 /// <summary>
 /// One table within a document.
@@ -97,8 +202,10 @@ internal sealed record TableRecipe(
 /// </summary>
 internal sealed record Recipe(
     int Seed,
-    int CellStyleCount,
-    int ColumnStyleCount,
+    IReadOnlyList<StyleRecipe> CellStyles,
+    IReadOnlyList<StyleRecipe> ColumnStyles,
+    IReadOnlyList<StyleRecipe> RowStyles,
+    IReadOnlyList<StyleRecipe> ExtraStyles,
     IReadOnlyList<TableRecipe> Tables)
 {
     /// <summary>
@@ -133,6 +240,25 @@ internal sealed record Recipe(
         LongText(),
     ];
 
+    private static readonly decimal[] Measures =
+        [0m, 0.001m, 0.74m, 1.5m, 9m, 14.5m, 20m, 32m, 40m, 72m, -3.25m, 1234.5678m];
+
+    private static readonly string[] DataStyles = ["N0", "N2", "N109"];
+
+    private static readonly string[] Angles = ["0", "90", "270"];
+
+    private static readonly string[] Paddings = ["0.097cm", "1mm", "0in", "2.5pt"];
+
+    private static readonly string[] Counts = ["0", "2", "6"];
+
+    private static readonly string[] Fonts = ["Calibri", "Liberation Sans", "A Font With  Spaces"];
+
+    private static readonly string[] Languages = ["de", "en", "zxx"];
+
+    private static readonly string[] RelativeWidths = ["1*", "8000*"];
+
+    private static readonly string[] Opacities = ["0%", "50%", "100%"];
+
     private static readonly string[] Widths = ["11mm", "20mm", "35mm", "7mm", "120mm", "0mm", "1.5mm", "1234.25mm"];
 
     /// <summary>
@@ -145,18 +271,161 @@ internal sealed record Recipe(
     {
         var random = new Random(seed);
 
-        var cellStyleCount = random.Next(0, 5);
-        var columnStyleCount = random.Next(0, 4);
+        var cellStyles = Styles(random, StyleTarget.TableCell, "ce", random.Next(0, 5));
+        var columnStyles = Styles(random, StyleTarget.TableColumn, "co", random.Next(0, 4));
+        var rowStyles = Styles(random, StyleTarget.TableRow, "ro", random.Next(1, 4));
+
+        // The families a spreadsheet uses more rarely. No cell refers to them; they are here
+        // because a style still has to serialize, and each family writes a different properties
+        // element.
+        var extra = new List<StyleRecipe>();
+        if (random.Next(0, 2) == 0)
+        {
+            extra.AddRange(Styles(random, StyleTarget.Table, "ta", 1));
+        }
+        if (random.Next(0, 2) == 0)
+        {
+            extra.AddRange(Styles(random, StyleTarget.Paragraph, "P", 1));
+        }
+        if (random.Next(0, 2) == 0)
+        {
+            extra.AddRange(Styles(random, StyleTarget.Graphic, "gr", 1));
+        }
 
         var tables = new List<TableRecipe>();
         var tableCount = random.Next(1, 4);
-        for (var t = 0; t < tableCount; t++)
+        for (var i = 0; i < tableCount; i++)
         {
-            tables.Add(GenerateTable(random, t, cellStyleCount, columnStyleCount));
+            tables.Add(GenerateTable(random, i, cellStyles.Count, columnStyles.Count));
         }
 
-        return new Recipe(seed, cellStyleCount, columnStyleCount, tables);
+        return new Recipe(seed, cellStyles, columnStyles, rowStyles, extra, tables);
     }
+
+    /// <summary>
+    /// Builds a run of styles of one family, each carrying the properties that family writes.
+    /// Some inherit from the one before, so the parent chain is exercised too.
+    /// </summary>
+    /// <param name="random">the source of randomness</param>
+    /// <param name="family">the family to build</param>
+    /// <param name="prefix">the prefix for the generated names</param>
+    /// <param name="count">how many to build</param>
+    /// <returns>the styles</returns>
+    private static List<StyleRecipe> Styles(Random random, StyleTarget family, string prefix, int count)
+    {
+        var styles = new List<StyleRecipe>();
+
+        for (var i = 0; i < count; i++)
+        {
+            var parent = i > 0 && random.Next(0, 3) == 0 ? prefix + "_" + (i - 1) : null;
+
+            styles.Add(new StyleRecipe(
+                prefix + "_" + i,
+                family,
+                parent,
+                random.Next(0, 3) == 0 ? DataStyles[random.Next(DataStyles.Length)] : null,
+                family == StyleTarget.TableCell ? CellProperties(random) : null,
+                family is StyleTarget.TableCell or StyleTarget.Paragraph ? ParagraphProperties(random) : null,
+                family is StyleTarget.TableCell or StyleTarget.Paragraph ? TextProperties(random) : null,
+                family == StyleTarget.TableColumn ? ColumnProperties(random) : null,
+                family == StyleTarget.TableRow ? RowProperties(random) : null,
+                family == StyleTarget.Graphic ? GraphicProperties(random) : null));
+        }
+
+        return styles;
+    }
+
+    private static CellProps CellProperties(Random random) => new(
+        MaybeLine(random),
+        MaybeLine(random),
+        MaybeLine(random),
+        MaybeLine(random),
+        MaybeColor(random),
+        MaybeEnum(random),
+        MaybeEnum(random),
+        MaybeEnum(random),
+        MaybeEnum(random),
+        MaybeEnum(random),
+        MaybeOne(random, Angles),
+        MaybeOne(random, Paddings),
+        MaybeOne(random, Paddings),
+        MaybeOne(random, Counts),
+        MaybeEnum(random),
+        MaybeEnum(random));
+
+    private static ParagraphProps ParagraphProperties(Random random) => new(
+        MaybeEnum(random),
+        MaybeMeasure(random),
+        MaybeOne(random, Counts));
+
+    private static TextProps TextProperties(Random random) => new(
+        MaybeEnum(random),
+        MaybeEnum(random),
+        MaybeMeasure(random),
+        MaybeOne(random, Fonts),
+        MaybeColor(random),
+        MaybeColor(random),
+        MaybeOne(random, Languages),
+        MaybeEnum(random),
+        MaybeOne(random, Paddings));
+
+    private static ColumnProps ColumnProperties(Random random) => new(
+        MaybeMeasure(random),
+        MaybeEnum(random),
+        MaybeEnum(random),
+        MaybeOne(random, RelativeWidths));
+
+    private static RowProps RowProperties(Random random) => new(
+        MaybeMeasure(random),
+        MaybeMeasure(random),
+        MaybeEnum(random),
+        MaybeColor(random),
+        MaybeEnum(random));
+
+    private static GraphicProps GraphicProperties(Random random) => new(
+        MaybeEnum(random),
+        MaybeColor(random),
+        MaybeEnum(random),
+        MaybeMeasure(random),
+        MaybeColor(random),
+        MaybeOne(random, Opacities));
+
+    /// <summary>
+    /// An index into a library enum, or null to leave that property unset. Build reduces the index
+    /// modulo the number of members, so the whole of every one of those enums is reachable from a
+    /// small range without this file naming any of them.
+    /// </summary>
+    /// <param name="random">the source of randomness</param>
+    /// <returns>the index, or null</returns>
+    private static int? MaybeEnum(Random random) => random.Next(0, 3) == 0 ? null : random.Next(0, 12);
+
+    private static MeasureRecipe? MaybeMeasure(Random random)
+        => random.Next(0, 3) == 0
+            ? null
+            : new MeasureRecipe(Measures[random.Next(Measures.Length)], random.Next(0, 12));
+
+    private static ColorRecipe? MaybeColor(Random random)
+    {
+        if (random.Next(0, 3) == 0)
+        {
+            return null;
+        }
+
+        return random.Next(0, 8) == 0
+            ? new ColorRecipe(0, 0, 0, true)
+            : new ColorRecipe((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), false);
+    }
+
+    private static LineRecipe? MaybeLine(Random random)
+        => random.Next(0, 3) == 0
+            ? null
+            : new LineRecipe(
+                new MeasureRecipe(Measures[random.Next(Measures.Length)], random.Next(0, 12)),
+                random.Next(0, 12),
+                MaybeColor(random) ?? new ColorRecipe(0, 0, 0, false));
+
+    private static string? MaybeOne(Random random, string[] pool)
+        => random.Next(0, 3) == 0 ? null : pool[random.Next(pool.Length)];
 
     private static TableRecipe GenerateTable(Random random, int index, int cellStyleCount, int columnStyleCount)
     {
@@ -199,7 +468,12 @@ internal sealed record Recipe(
                 (EmptyLineMode)random.Next(Enum.GetValues<EmptyLineMode>().Length),
                 // A repeat of 1 is the ordinary case; the rest exercise number-columns-repeated.
                 random.Next(0, 6) == 0 ? random.Next(1, 5) : 1,
-                (FrameKind)random.Next(Enum.GetValues<FrameKind>().Length)));
+                (FrameKind)random.Next(Enum.GetValues<FrameKind>().Length),
+                // The real callers mostly span by setting these on the cell rather than by
+                // calling SetCellSpan, so both routes are worth having.
+                random.Next(0, 8) == 0 ? random.Next(1, 4) : 1,
+                random.Next(0, 10) == 0 ? random.Next(1, 3) : 1,
+                random.Next(0, 12) == 0));
         }
 
         var spans = new List<SpanStep>();
@@ -240,6 +514,7 @@ internal sealed record Recipe(
     private static BulkStep GenerateBulk(Random random, int rows, int columns, int cellStyleCount)
     {
         var kind = (BulkKind)random.Next(Enum.GetValues<BulkKind>().Length);
+        var build = (RowBuild)random.Next(Enum.GetValues<RowBuild>().Length);
 
         var x = random.Next(0, columns);
         var y = random.Next(0, rows);
@@ -260,7 +535,7 @@ internal sealed record Recipe(
             values.Add(row);
         }
 
-        return new BulkStep(kind, x, y, values, cellStyleCount == 0 ? -1 : random.Next(-1, cellStyleCount));
+        return new BulkStep(kind, build, x, y, values, cellStyleCount == 0 ? -1 : random.Next(-1, cellStyleCount));
     }
 
     /// <summary>

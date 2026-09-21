@@ -43,26 +43,14 @@ internal static class Build
     {
         var doc = new OpenDocumentSpreadsheet("Compat");
 
-        var cellStyles = new OpenDocumentStyle[recipe.CellStyleCount];
-        for (var i = 0; i < cellStyles.Length; i++)
-        {
-            cellStyles[i] = new OpenDocumentStyle { Name = "ce_" + i, Family = StyleFamily.TableCell };
-            doc.Styles.Add(cellStyles[i].Name!, cellStyles[i]);
-        }
-
-        var columnStyles = new OpenDocumentStyle[recipe.ColumnStyleCount];
-        for (var i = 0; i < columnStyles.Length; i++)
-        {
-            columnStyles[i] = new OpenDocumentStyle { Name = "co_" + i, Family = StyleFamily.TableColumn };
-            doc.Styles.Add(columnStyles[i].Name!, columnStyles[i]);
-        }
-
-        var rowStyle = new OpenDocumentStyle { Name = "ro_x", Family = StyleFamily.TableRow };
-        doc.Styles.Add(rowStyle.Name!, rowStyle);
+        var cellStyles = AddStyles(doc, recipe.CellStyles);
+        var columnStyles = AddStyles(doc, recipe.ColumnStyles);
+        var rowStyles = AddStyles(doc, recipe.RowStyles);
+        AddStyles(doc, recipe.ExtraStyles);
 
         foreach (var table in recipe.Tables)
         {
-            BuildTable(doc, table, cellStyles, columnStyles, rowStyle);
+            BuildTable(doc, table, cellStyles, columnStyles, rowStyles);
         }
 
         // 1.0.4 has no leaveOpen and closes the stream, so the bytes are taken from the closed
@@ -77,7 +65,7 @@ internal static class Build
         TableRecipe table,
         OpenDocumentStyle[] cellStyles,
         OpenDocumentStyle[] columnStyles,
-        OpenDocumentStyle rowStyle)
+        OpenDocumentStyle[] rowStyles)
     {
         var ag = new AutoGrid(doc, doc.GetUniqueTableName(table.Name), table.Rows, table.Columns, table.DefaultWidth);
         doc.Tables.Add(ag);
@@ -111,7 +99,7 @@ internal static class Build
 
         foreach (var row in table.StyledRows)
         {
-            ag.WriteRowStyle(row, rowStyle);
+            Attempt(() => ag.WriteRowStyle(row, rowStyles[row % rowStyles.Length]));
         }
     }
 
@@ -148,6 +136,21 @@ internal static class Build
             cell.NumberColumnsRepeated = step.Repeat;
         }
 
+        if (step.ColumnsSpanned > 1)
+        {
+            cell.ColumnsSpanned = step.ColumnsSpanned;
+        }
+
+        if (step.RowsSpanned > 1)
+        {
+            cell.RowsSpanned = step.RowsSpanned;
+        }
+
+        if (step.IsCovered)
+        {
+            cell.IsCovered = true;
+        }
+
         Attempt(() => ag.WriteCell(step.X, step.Y, cell, style));
     }
 
@@ -161,18 +164,22 @@ internal static class Build
                 Attempt(() => ag.WriteColumn(bulk.X, bulk.Y, bulk.Values.Select(r => r[0])));
                 break;
 
+            case BulkKind.WriteColumns:
+                Attempt(() => ag.WriteColumns(bulk.X, bulk.Y, bulk.Values.Select(r => r.AsEnumerable())));
+                break;
+
             case BulkKind.WriteRow:
-                Attempt(() => ag.WriteRow(bulk.X, bulk.Y, MakeRow(bulk.Values[0], style)));
+                Attempt(() => ag.WriteRow(bulk.X, bulk.Y, MakeRow(bulk.Values[0], bulk.Build, style)));
                 break;
 
             case BulkKind.WriteRowsArray:
-                Attempt(() => ag.WriteRows(bulk.X, bulk.Y, [.. bulk.Values.Select(r => MakeRow(r, style))]));
+                Attempt(() => ag.WriteRows(bulk.X, bulk.Y, [.. bulk.Values.Select(r => MakeRow(r, bulk.Build, style))]));
                 break;
 
             case BulkKind.WriteRowsEnumerable:
-                // Cast so the IEnumerable overload is taken rather than the params array one: the
-                // two reach the grid differently.
-                Attempt(() => ag.WriteRows(bulk.X, bulk.Y, bulk.Values.Select(r => MakeRow(r, style))));
+                // Not an array, so the IEnumerable overload is taken rather than the params one:
+                // the two reach the grid differently.
+                Attempt(() => ag.WriteRows(bulk.X, bulk.Y, bulk.Values.Select(r => MakeRow(r, bulk.Build, style))));
                 break;
 
             default:
@@ -180,15 +187,96 @@ internal static class Build
         }
     }
 
-    private static Row MakeRow(IReadOnlyList<string> values, OpenDocumentStyle? style)
+    /// <summary>
+    /// Fills a row. The released version offers several ways to do it and they do not all end in
+    /// the same place, so which one is used is part of the recipe.
+    /// </summary>
+    /// <param name="values">the cell texts</param>
+    /// <param name="build">how to put the row together</param>
+    /// <param name="style">the style for the cells, if any</param>
+    /// <returns>the row</returns>
+    private static Row MakeRow(IReadOnlyList<string> values, RowBuild build, OpenDocumentStyle? style)
     {
         var row = style is null ? new Row() : new Row(style);
-        foreach (var value in values)
+
+        switch (build)
         {
-            row.Add(new OpenDocumentCell(value));
+            case RowBuild.AddString:
+                foreach (var value in values)
+                {
+                    row.Add(value);
+                }
+                break;
+
+            case RowBuild.AddTuple:
+                foreach (var value in values)
+                {
+                    if (style is null)
+                    {
+                        row.Add(value);
+                    }
+                    else
+                    {
+                        row.Add((value, style));
+                    }
+                }
+                break;
+
+            case RowBuild.InsertCell:
+                foreach (var value in values)
+                {
+                    row.InsertCell(value);
+                }
+                break;
+
+            case RowBuild.InsertCellWithStyle:
+                foreach (var value in values)
+                {
+                    row.InsertCell(value, style!);
+                }
+                break;
+
+            case RowBuild.InsertCells:
+                row.InsertCells([.. values.Select(v => new OpenDocumentCell(v))]);
+                break;
+
+            case RowBuild.TemplateString:
+                // Cells are separated by a pipe and a lone * is a covered cell. The values go in
+                // as the format arguments, so the braces in the template have to line up with
+                // them.
+                row.InsertCellsFromTemplateString(style, Template(values.Count), [.. values]);
+                break;
+
+            case RowBuild.AddThenReplace:
+                foreach (var value in values)
+                {
+                    row.Add(new OpenDocumentCell(value));
+                }
+                if (row.Count > 0)
+                {
+                    row.Replace(row.Count - 1, new OpenDocumentCell("replaced  text "));
+                }
+                break;
+
+            default:
+                foreach (var value in values)
+                {
+                    row.Add(new OpenDocumentCell(value));
+                }
+                break;
         }
+
         return row;
     }
+
+    /// <summary>
+    /// A template for <c>InsertCellsFromTemplateString</c>: one placeholder per value, with a
+    /// covered cell thrown in so that branch is taken too.
+    /// </summary>
+    /// <param name="count">how many values there are</param>
+    /// <returns>the template</returns>
+    private static string Template(int count)
+        => string.Join("|", Enumerable.Range(0, count).Select(i => i % 4 == 3 ? "*" : "{" + i + "}"));
 
     private static string Formula(CellStep step)
         => "of:=SUM([.A" + ((step.X % 7) + 1) + ":.A" + ((step.Y % 9) + 2) + "])";
@@ -233,6 +321,181 @@ internal static class Build
         }
 
         return frame;
+    }
+
+
+    /// <summary>
+    /// Registers a run of styles on the document and returns them in recipe order.
+    /// </summary>
+    /// <param name="doc">the document</param>
+    /// <param name="recipes">the styles to add</param>
+    /// <returns>the styles</returns>
+    private static OpenDocumentStyle[] AddStyles(OpenDocumentSpreadsheet doc, IReadOnlyList<StyleRecipe> recipes)
+    {
+        var styles = new OpenDocumentStyle[recipes.Count];
+
+        for (var i = 0; i < recipes.Count; i++)
+        {
+            styles[i] = MakeStyle(recipes[i]);
+            doc.Styles.Add(styles[i].Name!, styles[i]);
+        }
+
+        return styles;
+    }
+
+    private static OpenDocumentStyle MakeStyle(StyleRecipe recipe)
+    {
+        var style = new OpenDocumentStyle
+        {
+            Name = recipe.Name,
+            Family = recipe.Family switch
+            {
+                StyleTarget.TableCell => StyleFamily.TableCell,
+                StyleTarget.TableColumn => StyleFamily.TableColumn,
+                StyleTarget.TableRow => StyleFamily.TableRow,
+                StyleTarget.Table => StyleFamily.Table,
+                StyleTarget.Paragraph => StyleFamily.Paragraph,
+                _ => StyleFamily.Graphic,
+            },
+            ParentStyleName = recipe.ParentName,
+            DataStyleName = recipe.DataStyleName,
+        };
+
+        if (recipe.Cell is { } cell)
+        {
+            style.TableCellProperties = new TableCellProperties
+            {
+                Border = Line(cell.Border),
+                BorderLeft = Line(cell.BorderLeft),
+                BorderTop = Line(cell.BorderTop),
+                DiagonalTopLeftBottomRight = Line(cell.Diagonal),
+                BackgroundColor = Colour(cell.BackgroundColor),
+                VerticalAlign = Pick<VerticalAlign>(cell.VerticalAlign),
+                WrapOption = Pick<WrapOption>(cell.WrapOption),
+                TextAlignSource = Pick<TextAlignSource>(cell.TextAlignSource),
+                CellProtect = Pick<CellProtectionLevel>(cell.CellProtect),
+                RotationAlign = Pick<RotationAlign>(cell.RotationAlign),
+                RotationAngle = cell.RotationAngle,
+                Padding = cell.Padding,
+                PaddingLeft = cell.PaddingLeft,
+                DecimalPlaces = cell.DecimalPlaces,
+                ShrinkToFit = Pick<OpenDocBoolean>(cell.ShrinkToFit),
+                PrintContent = Pick<OpenDocBoolean>(cell.PrintContent),
+            };
+        }
+
+        if (recipe.Paragraph is { } paragraph)
+        {
+            style.ParagraphProperties = new ParagraphProperties
+            {
+                TextAlign = Pick<TextAlign>(paragraph.TextAlign),
+                MarginLeft = Measure(paragraph.MarginLeft),
+                LineBreak = paragraph.LineBreak,
+            };
+        }
+
+        if (recipe.Text is { } text)
+        {
+            style.TextProperties = new TextProperties
+            {
+                FontWeight = Pick<FontWeight>(text.FontWeight),
+                FontStyle = Pick<OpenDocumentCreator.DataTypes.FontStyle>(text.FontStyle),
+                FontSize = Measure(text.FontSize),
+                FontFamily = text.FontFamily,
+                Color = Colour(text.Color),
+                BackgroundColor = Colour(text.BackgroundColor),
+                Language = text.Language,
+                TextUnderlineStyle = Pick<LineStyle>(text.UnderlineStyle),
+                LetterSpacing = text.LetterSpacing,
+            };
+        }
+
+        if (recipe.Column is { } column)
+        {
+            style.TableColumnProperties = new TableColumnProperties
+            {
+                ColumnWidth = Measure(column.ColumnWidth),
+                UseOptimalColumnWidth = Pick<OpenDocBoolean>(column.UseOptimal),
+                BreakBefore = Pick<BreakValue>(column.BreakBefore),
+                RelativeColumnWidth = column.RelativeColumnWidth,
+            };
+        }
+
+        if (recipe.Row is { } row)
+        {
+            style.TableRowProperties = new TableRowProperties
+            {
+                RowHeight = Measure(row.RowHeight),
+                MinRowHeight = Measure(row.MinRowHeight),
+                UseOptimalRowHeight = Pick<OpenDocBoolean>(row.UseOptimal),
+                BackgroundColor = Colour(row.BackgroundColor),
+                BreakBefore = Pick<BreakValue>(row.BreakBefore),
+            };
+        }
+
+        if (recipe.Graphic is { } graphic)
+        {
+            style.GraphicProperties = new GraphicProperties
+            {
+                Fill = Pick<FillValue>(graphic.Fill),
+                FillColor = Colour(graphic.FillColor),
+                Stroke = Pick<StrokeValue>(graphic.Stroke) ?? StrokeValue.None,
+                StrokeWidth = Measure(graphic.StrokeWidth),
+                StrokeColor = Colour(graphic.StrokeColor),
+                StrokeOpacity = graphic.Opacity,
+            };
+        }
+
+        return style;
+    }
+
+    /// <summary>
+    /// Turns a recipe's enum index into a member. The index is reduced modulo the number of
+    /// members, so the recipe reaches all of them without naming the enum.
+    /// </summary>
+    /// <typeparam name="T">the enum</typeparam>
+    /// <param name="index">the index, or null to leave the property unset</param>
+    /// <returns>the member, or null</returns>
+    private static T? Pick<T>(int? index)
+        where T : struct, Enum
+    {
+        if (index is null)
+        {
+            return null;
+        }
+
+        var values = Enum.GetValues<T>();
+        return values[index.Value % values.Length];
+    }
+
+    private static Measurement? Measure(MeasureRecipe? measure)
+    {
+        if (measure is null)
+        {
+            return null;
+        }
+
+        var units = Enum.GetValues<Unit>();
+        return new Measurement(measure.Value, units[measure.Unit % units.Length]);
+    }
+
+    private static Color? Colour(ColorRecipe? colour)
+        => colour is null ? null
+            : colour.Transparent ? new Color(true)
+            : new Color(colour.Red, colour.Green, colour.Blue);
+
+    private static CompoundLine? Line(LineRecipe? line)
+    {
+        if (line is null)
+        {
+            return null;
+        }
+
+        var styles = Enum.GetValues<LineStyle>();
+        return new CompoundLine(
+            Measure(line.Width)!.Value,
+            styles[line.Style % styles.Length],
+            Colour(line.Color)!.Value);
     }
 
     /// <summary>
