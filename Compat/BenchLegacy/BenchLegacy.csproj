@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>OdcCompat</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+
+    <!-- BenchmarkDotNet needs to build and launch its generated projects in Release. -->
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+
+    <!-- The released assembly to measure against. Override to point at another version. -->
+    <LegacyAssembly Condition="'$(LegacyAssembly)' == ''">$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)'))telani.opendocumentcreator\1.0.4\lib\net10.0\OpenDocumentCreator.dll</LegacyAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Only the released library, for the same reason the Compat projects are split in two. -->
+    <Reference Include="OpenDocumentCreator">
+      <HintPath>$(LegacyAssembly)</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\Bench.cs" Link="Bench.cs" />
+  </ItemGroup>
+
+</Project>

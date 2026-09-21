@@ -37,6 +37,26 @@ Point it elsewhere with `-p:LegacyAssembly=<path to OpenDocumentCreator.dll>`.
 `meta.xml` records the moment of saving, so those two timestamps are blanked before comparing.
 Nothing else is normalized; every other byte must match.
 
+## Measuring against the released version
+
+`BenchLegacy` and `BenchCurrent` are the same arrangement as `Legacy` and `Current`, for timing
+rather than for bytes: one BenchmarkDotNet benchmark (`Shared/Bench.cs`) compiled against each
+library, so the difference between the two sets of numbers is the difference between the libraries.
+
+```
+dotnet run -c Release --project Compat/BenchLegacy  -- --filter "*"
+dotnet run -c Release --project Compat/BenchCurrent -- --filter "*"
+```
+
+Building and saving are timed together, on a document constructed inside the benchmark. That is
+what a caller experiences, and it also avoids 1.0.4 not being safe to save twice, which would make
+repeated iterations meaningless.
+
+Run each side at least twice and interleave them. Timings on a desktop drift by 10 to 30 per cent
+between runs, enough to invent or erase a difference of that size, so a single pair of runs is not
+evidence. The allocation figures repeat to the second decimal and are the more dependable half of
+the output.
+
 ## Putting the deliberate changes back first
 
 Some changes since 1.0.4 alter the output **on purpose**, so a clean comparison needs them
