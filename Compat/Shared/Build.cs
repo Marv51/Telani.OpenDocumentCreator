@@ -30,7 +30,17 @@ internal static class Build
 
             try
             {
-                File.WriteAllBytes(path, Save(recipe));
+                if (recipe.Unzip)
+                {
+                    // Saving to a path with unzip set writes the package and, beside it, a
+                    // directory holding the same parts as loose files. Those come out of a
+                    // different serializer, so the directory is compared as well.
+                    MakeDocument(recipe).Save(path, true, recipe.DocumentFont).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    File.WriteAllBytes(path, Save(recipe));
+                }
             }
             catch (Exception ex)
             {
