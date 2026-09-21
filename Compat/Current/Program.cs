@@ -55,7 +55,11 @@ internal static class Program
                 continue;
             }
 
-            var difference = FirstDifferingPart(File.ReadAllBytes(oldPath), File.ReadAllBytes(newPath));
+            var difference = FirstDifferingPart(File.ReadAllBytes(oldPath), File.ReadAllBytes(newPath))
+                ?? FirstDifferingLooseFile(
+                    Path.Combine(oldDirectory, seed.ToString(CultureInfo.InvariantCulture)),
+                    Path.Combine(newDirectory, seed.ToString(CultureInfo.InvariantCulture)));
+
             if (difference is null)
             {
                 identical++;
@@ -122,6 +126,68 @@ internal static class Program
 
         return null;
     }
+
+
+    /// <summary>
+    /// Compares the loose files a save with unzip set leaves beside the package. They are written
+    /// by a different serializer than the package's parts, so they are worth comparing separately;
+    /// seeds that did not ask for it have no such directory and are skipped.
+    /// </summary>
+    /// <param name="oldDir">the released build's directory</param>
+    /// <param name="newDir">the working copy's directory</param>
+    /// <returns>the first difference, or null if there is none</returns>
+    private static string? FirstDifferingLooseFile(string oldDir, string newDir)
+    {
+        var oldExists = Directory.Exists(oldDir);
+        var newExists = Directory.Exists(newDir);
+
+        if (!oldExists && !newExists)
+        {
+            return null;
+        }
+
+        if (oldExists != newExists)
+        {
+            return $"unzipped directory written by {(oldExists ? "the released build" : "the working copy")} only";
+        }
+
+        var oldFiles = RelativeFiles(oldDir);
+        var newFiles = RelativeFiles(newDir);
+
+        if (!oldFiles.SequenceEqual(newFiles, StringComparer.Ordinal))
+        {
+            return "unzipped: different files: [" + string.Join(", ", oldFiles) + "] vs [" + string.Join(", ", newFiles) + "]";
+        }
+
+        foreach (var name in oldFiles)
+        {
+            var a = File.ReadAllBytes(Path.Combine(oldDir, name));
+            var b = File.ReadAllBytes(Path.Combine(newDir, name));
+
+            if (name.EndsWith("meta.xml", StringComparison.Ordinal))
+            {
+                var oldMeta = WithoutTimestamps(Encoding.UTF8.GetString(a));
+                var newMeta = WithoutTimestamps(Encoding.UTF8.GetString(b));
+                if (!string.Equals(oldMeta, newMeta, StringComparison.Ordinal))
+                {
+                    return "unzipped " + name + " " + DescribeFirstDifference(Encoding.UTF8.GetBytes(oldMeta), Encoding.UTF8.GetBytes(newMeta));
+                }
+                continue;
+            }
+
+            if (!a.AsSpan().SequenceEqual(b))
+            {
+                return "unzipped " + name + " " + DescribeFirstDifference(a, b);
+            }
+        }
+
+        return null;
+    }
+
+    private static List<string> RelativeFiles(string root)
+        => [.. Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+            .OrderBy(f => f, StringComparer.Ordinal)];
 
     private static string WithoutTimestamps(string metaXml)
         => System.Text.RegularExpressions.Regex.Replace(

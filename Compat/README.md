@@ -28,6 +28,9 @@ dotnet run --project Compat/Current -- <dir>/new <dir>/old 1 3000
 The second prints how many documents were identical and shows the first difference in each that
 was not. It exits non-zero when anything differed.
 
+Some seeds also save unzipped, which leaves a directory of loose files beside the package. Those
+are compared too, and a difference in them is reported as `unzipped <file>`.
+
 By default the released side is `telani.opendocumentcreator/1.0.4` from the NuGet package folder.
 Point it elsewhere with `-p:LegacyAssembly=<path to OpenDocumentCreator.dll>`.
 
@@ -110,6 +113,9 @@ So the generator covers, instead:
   anything it does not name
 - `Row.Remove` and `Row.Clear`, and `TotalNumberOfColumns` asked in the middle of building, where
   its cached answer has to be dropped by the writes around it
+- **saving unzipped**, one document in four. That writes the parts out as loose files beside the
+  package, through the element tree serializer rather than the streaming one, so it is a second
+  path over the same document. The directory is compared file by file alongside the package
 
 The second half of that list came from reading a real caller of this library rather than from
 guessing. It writes its spans on the cell and hardly ever calls `SetCellSpan`, it fills rows
@@ -150,6 +156,12 @@ cannot be reached from any public API:
   master page points at one by name. The code that would build it is commented out
 - `style:fraction` belongs to a number style the library never builds
 
+Saving unzipped also turned up something the comparison cannot show, because both versions do it:
+of the documents that carry more than one binary resource, the unzipped copy holds only the first.
+`File.WriteAllBytes` sits inside the `if (!Directory.Exists(...))` that creates `media`, so once
+that directory exists the rest are skipped. It came to 38 of the 96 documents with resources in a
+500 document run.
+
 So a document this library writes always carries a `style:page-layout-name="pm1"` that resolves to
 nothing. Both versions do it, so the comparison stays clean; it is noted here because it looks like
 a gap in the corpus and is not one.
@@ -173,6 +185,7 @@ run. Those the corpus catches:
 | the filled in default table named `Sheet1` rather than `Tabelle 1` | 20 |
 | image resources written to `media/img*` rather than `media/image*` | 371 |
 | an `int` passed to `WriteCell` setting the row span rather than the repeat count | 32 |
+| a character added to the `mimetype` written beside an unzipped save | 126 |
 
 Every one of those is reachable only because the corpus sets the property in question. Each of them
 passed unnoticed against an earlier version of this corpus.

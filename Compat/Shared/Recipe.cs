@@ -487,6 +487,7 @@ internal sealed record Recipe(
     DocumentKind Kind,
     string DocumentFont,
     IReadOnlyList<ImageResource> Images,
+    bool Unzip,
     bool UnregisteredStyle,
     IReadOnlyList<StyleRecipe> CellStyles,
     IReadOnlyList<StyleRecipe> ColumnStyles,
@@ -678,6 +679,9 @@ internal sealed record Recipe(
             kind,
             random.Next(0, 10) == 0 ? string.Empty : Fonts[random.Next(Fonts.Length)],
             images,
+            // Saving unzipped writes the parts out as loose files as well, through a different
+            // serializer than the package takes.
+            random.Next(0, 4) == 0,
             random.Next(0, 8) == 0,
             cellStyles,
             columnStyles,
