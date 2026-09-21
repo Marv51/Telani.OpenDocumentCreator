@@ -1,0 +1,14 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Benchmarks/">
+    <Project Path="Benchmarks/Telani.OpenDocumentCreator.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Project Path="DemoApp/DemoApp.csproj" />
+  <Project Path="src/Telani.OpenDocumentCreator.csproj" />
+  <Project Path="Tests/Telani.OpenDocumentCreator.Tests.csproj" />
+</Solution>
