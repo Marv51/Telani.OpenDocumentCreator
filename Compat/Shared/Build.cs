@@ -109,6 +109,18 @@ internal static class Build
             ag.Shapes = shapes;
         }
 
+        if (table.AutoColumns is { } auto)
+        {
+            // The other way to put columns on a table: widths go in, and the processor makes the
+            // column styles itself, sharing one between columns of equal width.
+            Attempt(() => AutoColumnProcessor.Apply(
+                doc,
+                ag,
+                auto.FromTemplate
+                    ? AutoColumnProcessor.ParseTemplateString(auto.Template)
+                    : AutoColumnProcessor.CreateColumns(auto.Count, auto.Width)));
+        }
+
         foreach (var column in table.ManualColumns)
         {
             // Put on the table directly rather than through AutoGrid, which never sets these.
@@ -171,6 +183,29 @@ internal static class Build
             CellKind.Frame => new OpenDocumentCell { Frame = Frame(step.Frame) },
             _ => new OpenDocumentCell(),
         };
+
+        // Laid over whatever the kind already put in the cell. The writer chooses between a link,
+        // a formula, a frame and plain content by precedence rather than writing all of them, so
+        // these combinations are what holds that order in place.
+        if ((step.Extras & 1) != 0)
+        {
+            cell.Formula = Formula(step);
+        }
+
+        if ((step.Extras & 2) != 0)
+        {
+            cell.Link = Link(step);
+        }
+
+        if ((step.Extras & 4) != 0)
+        {
+            cell.Frame = Frame(step.Frame);
+        }
+
+        if ((step.Extras & 8) != 0)
+        {
+            cell.Content = step.Text;
+        }
 
         if (step.EmptyLines != EmptyLineMode.Unset)
         {
@@ -424,6 +459,7 @@ internal static class Build
             },
             ParentStyleName = recipe.ParentName,
             DataStyleName = recipe.DataStyleName,
+            MasterPageName = recipe.MasterPageName,
         };
 
         if (recipe.Cell is { } cell)
@@ -431,21 +467,37 @@ internal static class Build
             style.TableCellProperties = new TableCellProperties
             {
                 Border = Line(cell.Border),
+                BorderBottom = Line(cell.BorderBottom),
                 BorderLeft = Line(cell.BorderLeft),
+                BorderRight = Line(cell.BorderRight),
                 BorderTop = Line(cell.BorderTop),
-                DiagonalTopLeftBottomRight = Line(cell.Diagonal),
+                DiagonalTopLeftBottomRight = Line(cell.DiagonalTopLeftBottomRight),
+                DiagonalTopLeftBottomRightWidths = Line(cell.DiagonalTopLeftBottomRightWidths),
+                DiagonalBottomLeftTopRight = Line(cell.DiagonalBottomLeftTopRight),
+                DiagonalBottomLeftTopRightWidths = Line(cell.DiagonalBottomLeftTopRightWidths),
                 BackgroundColor = Colour(cell.BackgroundColor),
                 VerticalAlign = Pick<VerticalAlign>(cell.VerticalAlign),
                 WrapOption = Pick<WrapOption>(cell.WrapOption),
                 TextAlignSource = Pick<TextAlignSource>(cell.TextAlignSource),
                 CellProtect = Pick<CellProtectionLevel>(cell.CellProtect),
                 RotationAlign = Pick<RotationAlign>(cell.RotationAlign),
-                RotationAngle = cell.RotationAngle,
-                Padding = cell.Padding,
-                PaddingLeft = cell.PaddingLeft,
-                DecimalPlaces = cell.DecimalPlaces,
+                Direction = Pick<TextDirection>(cell.Direction),
+                WritingMode = Pick<WritingMode>(cell.WritingMode),
                 ShrinkToFit = Pick<OpenDocBoolean>(cell.ShrinkToFit),
                 PrintContent = Pick<OpenDocBoolean>(cell.PrintContent),
+                RepeatContent = Pick<OpenDocBoolean>(cell.RepeatContent),
+                RotationAngle = cell.RotationAngle,
+                Padding = cell.Padding,
+                PaddingBottom = cell.PaddingBottom,
+                PaddingLeft = cell.PaddingLeft,
+                PaddingRight = cell.PaddingRight,
+                PaddingTop = cell.PaddingTop,
+                BorderLineWidth = cell.BorderLineWidth,
+                BorderLineWidthBottom = cell.BorderLineWidthBottom,
+                BorderLineWidthTop = cell.BorderLineWidthTop,
+                DecimalPlaces = cell.DecimalPlaces,
+                GlyphOrientationVertical = cell.GlyphOrientationVertical,
+                Shadow = cell.Shadow,
             };
         }
 
@@ -465,13 +517,29 @@ internal static class Build
             {
                 FontWeight = Pick<FontWeight>(text.FontWeight),
                 FontStyle = Pick<OpenDocumentCreator.DataTypes.FontStyle>(text.FontStyle),
+                TextUnderlineStyle = Pick<LineStyle>(text.UnderlineStyle),
+                TextUnderlineType = Pick<LineType>(text.UnderlineType),
                 FontSize = Measure(text.FontSize),
-                FontFamily = text.FontFamily,
+                FontSizeAsian = Measure(text.FontSizeAsian),
+                FontSizeComplex = Measure(text.FontSizeComplex),
                 Color = Colour(text.Color),
                 BackgroundColor = Colour(text.BackgroundColor),
+                FontFamily = text.FontFamily,
+                FontName = text.FontName,
+                FontNameAsian = text.FontNameAsian,
+                FontNameComplex = text.FontNameComplex,
+                FontVariant = text.FontVariant,
+                FontCharset = text.FontCharset,
                 Language = text.Language,
-                TextUnderlineStyle = Pick<LineStyle>(text.UnderlineStyle),
+                Country = text.Country,
+                Script = text.Script,
                 LetterSpacing = text.LetterSpacing,
+                TextTransform = text.TextTransform,
+                TextShadow = text.TextShadow,
+                Hyphenate = text.Hyphenate,
+                HyphenationPushCharCount = text.HyphenationPushCharCount,
+                Display = text.Display,
+                Condition = text.Condition,
             };
         }
 
@@ -482,6 +550,7 @@ internal static class Build
                 ColumnWidth = Measure(column.ColumnWidth),
                 UseOptimalColumnWidth = Pick<OpenDocBoolean>(column.UseOptimal),
                 BreakBefore = Pick<BreakValue>(column.BreakBefore),
+                BreakAfter = Pick<BreakValue>(column.BreakAfter),
                 RelativeColumnWidth = column.RelativeColumnWidth,
             };
         }
@@ -493,8 +562,19 @@ internal static class Build
                 RowHeight = Measure(row.RowHeight),
                 MinRowHeight = Measure(row.MinRowHeight),
                 UseOptimalRowHeight = Pick<OpenDocBoolean>(row.UseOptimal),
-                BackgroundColor = Colour(row.BackgroundColor),
                 BreakBefore = Pick<BreakValue>(row.BreakBefore),
+                BreakAfter = Pick<BreakValue>(row.BreakAfter),
+                BackgroundColor = Colour(row.BackgroundColor),
+                KeepTogether = row.KeepTogether,
+            };
+        }
+
+        if (recipe.Table is { } table)
+        {
+            style.TableProperties = new TableProperties
+            {
+                WritingMode = Pick<WritingMode>(table.WritingMode),
+                Display = Pick<OpenDocBoolean>(table.Display),
             };
         }
 
@@ -503,11 +583,24 @@ internal static class Build
             style.GraphicProperties = new GraphicProperties
             {
                 Fill = Pick<FillValue>(graphic.Fill),
-                FillColor = Colour(graphic.FillColor),
                 Stroke = Pick<StrokeValue>(graphic.Stroke) ?? StrokeValue.None,
-                StrokeWidth = Measure(graphic.StrokeWidth),
+                FillColor = Colour(graphic.FillColor),
                 StrokeColor = Colour(graphic.StrokeColor),
-                StrokeOpacity = graphic.Opacity,
+                StrokeWidth = Measure(graphic.StrokeWidth),
+                PaddingTop = Measure(graphic.PaddingTop),
+                PaddingLeft = Measure(graphic.PaddingLeft),
+                Opacity = graphic.Opacity,
+                StrokeOpacity = graphic.StrokeOpacity,
+                StrokeLineCap = graphic.StrokeLineCap,
+                StrokeLineJoin = graphic.StrokeLineJoin,
+                AutoGrowHeight = graphic.AutoGrowHeight,
+                ColorMode = graphic.ColorMode,
+                Contrast = graphic.Contrast,
+                Gamma = graphic.Gamma,
+                Luminance = graphic.Luminance,
+                Mirror = graphic.Mirror,
+                ImageOpacity = graphic.ImageOpacity,
+                TextareaHorizontalAlign = graphic.TextareaHorizontalAlign,
             };
         }
 
