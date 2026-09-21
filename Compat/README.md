@@ -79,6 +79,15 @@ So the generator covers, instead:
   `SetCellSpan`
 - every way of filling a `Row`: `Add` in each overload, `InsertCell` with and without a style,
   `InsertCells`, `InsertCellsFromTemplateString`, and `Replace`
+- **text documents**, one in twelve, which have a content writer of their own
+- **table names the library rewrites**: the forbidden characters, the reserved `History`, the empty
+  one, the 31 character limit, and names repeated so the unique name search has to run
+- `table:shapes` on the table, and frames with geometry, a drawing id and style names, not only a
+  name
+- columns put on the table **by hand**, carrying the visibility, repeat count and default cell
+  style that AutoGrid never sets
+- the **document font**, which lands in `style:font-name`
+- links that are `mailto:`, relative, or carry characters outside ASCII
 
 The second half of that list came from reading a real caller of this library rather than from
 guessing. It writes its spans on the cell and hardly ever calls `SetCellSpan`, it fills rows
@@ -94,8 +103,11 @@ do not exist in 1.0.4 at all, so nothing can be compared against; they are cover
 
 ## What it found
 
-With the deliberate changes reverted, **3000 of 3000** generated documents came out byte for byte
-identical to 1.0.4.
+With the deliberate changes reverted, **2993 of 3000** generated documents came out byte for byte
+identical to 1.0.4, and the remaining 7 were refused by both versions for the same reason: a
+document holding two tables whose names both normalize to `Tabelle 1`, which `GetUniqueTableName`
+does not foresee because it compares the name before the setter rewrites it. Both versions agree,
+which is what is being measured here.
 
 The corpus matters more than the count. An early run of 2000 documents also reported everything
 identical - and then reported everything identical again with the space encoder deliberately
@@ -111,6 +123,13 @@ run. Three that the corpus catches:
 | `TrimEnds` empty line handling treated as `Preserve` | 167 |
 | border line written as style, width, colour instead of width, style, colour | 402 |
 | measurements formatted `0.##` instead of round trip | 416 |
+| spaces in a table name escaped to `-` instead of `_` | 149 |
+| one letter changed in the text document's content | 40 |
 
 Every one of those is reachable only because the corpus sets the property in question. Each of them
 passed unnoticed against an earlier version of this corpus.
+
+One caution about choosing a mutation. Routing `:` through `.` in `EscapeTableName` changed nothing
+at all, because the routine maps `.` to `;` a few lines further down and both paths end on the same
+character. The corpus was covering that name perfectly well; the mutation was the thing at fault. A
+mutation that survives is worth a second look before it is read as a gap in the corpus.
